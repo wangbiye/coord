@@ -23,6 +23,7 @@ skills/
   coord-init/
   coord-join/
   coord-archive/
+  coord-archive-all/
   coord-sync/
   coord-brief/
   coord-status/
@@ -62,6 +63,8 @@ README.md
 ```
 
 安装后，重启或重新加载你的 agent 环境，让它重新发现这些 skills。
+
+安装脚本是同步安装：它会先清理目标目录中的 `coord` 和 `coord-*` skill，再复制当前仓库里的版本，因此删除或重命名命令后不会留下旧入口。它不会清理 `lark-*`、`superpowers`、`blueprinter` 或其他非 coord skill。
 
 ## 数据目录
 
@@ -144,6 +147,7 @@ $coord-join group-a frontend
 | `$coord-init <group>` | `$coord init <group>` | 创建 group |
 | `$coord-join <group> <agent>` | `$coord join <group> <agent>` | 加入 group |
 | `$coord-archive <group>` | `$coord archive <group>` | 归档 group |
+| `$coord-archive-all` | `$coord archive-all` | 归档所有 active group |
 | `$coord-sync` | `$coord sync` | 同步当前 group |
 | `$coord-brief [group]` | `$coord brief` | 查看 group 简报 |
 | `$coord-status [group]` | `$coord status` | 查看紧凑状态 |
@@ -217,6 +221,8 @@ $coord-note <内容>
 
 已加入 group 后，即使用户没有再次输入 `$coord`，review、分析、实现、验证、排查、规划这类任务完成前也应该写一条 `note`，除非用户明确说不要记录。
 
+记录是共享状态，不是聊天记录。写入 `note`、`decision`、`answer` 或 `handoff` 前，应只提炼最终有效结论、当前状态和仍有效风险；不要记录推理过程、协商过程、草稿、候选方案、被推翻的 review 结论或“修订审查结论”这类中间态。如果用户在 join 后要求记录“刚才”“前面”“当前会话”的 review 结果、结论或约定，agent 必须回看当前会话中 join 前后的相关内容，记录最后稳定版本，不能只取最近一条消息。
+
 提问：
 
 ```text
@@ -278,6 +284,13 @@ $coord archive <group>
 $coord-archive <group>
 ```
 
+归档所有 active group：
+
+```text
+$coord archive-all
+$coord-archive-all
+```
+
 归档是移动，不是删除：
 
 ```text
@@ -301,6 +314,8 @@ $coord-archive <group>
 认领登录页 UI，文件 src/login/**
 交接一下当前进展
 归档 checkout-flow
+归档所有协作组
+把刚才的 review 结果记录下来
 ```
 
 语义不明确时，agent 应先问一个澄清问题，不应该猜。

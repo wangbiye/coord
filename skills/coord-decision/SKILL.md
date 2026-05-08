@@ -21,4 +21,4 @@ $coord-decision <decision>
 python3 <coord-skill-dir>/scripts/coord.py decision --group <group> --agent <agent> "<decision>"
 ```
 
-只用于记录 group 应该遵循的稳定决策或约定。
+只用于记录 group 应该遵循的稳定决策或约定。不要记录候选方案、协商过程、临时判断或尚未确认的中间态。

@@ -1,6 +1,6 @@
 ---
 name: coord
-description: 当用户输入 $coord 或 $coord-* 命令，想协调多个 AI agent 会话、加入或同步协作组、记录笔记、提问或回答、记录决策、认领范围、释放认领或交接工作时使用；已加入协作组的会话完成需要组内可见的工作结果时也使用。
+description: 当用户输入 $coord 或 $coord-* 命令，想协调多个 AI agent 会话、加入或同步协作组、记录笔记、提问或回答、记录决策、认领范围、释放认领、归档一个或所有协作组，或交接工作时使用；已加入协作组的会话完成需要组内可见的工作结果时也使用。
 ---
 
 # Coord
@@ -15,9 +15,9 @@ Allowed write scope for this skill:
 ${COORD_ROOT:-~/.coord}/**
 ```
 
-Writing coordination state is allowed only when the user explicitly uses `$coord` write commands or clearly asks to join, note, ask, answer, decide, claim, release, or hand off coordination state. This does not authorize project file edits, git writes, process cleanup, dependency installs, databases, Lark, or external APIs.
+Writing coordination state is allowed only when the user explicitly uses `$coord` write commands or clearly asks to join, note, ask, answer, decide, claim, release, archive, or hand off coordination state. This does not authorize project file edits, git writes, process cleanup, dependency installs, databases, Lark, or external APIs.
 
-Archiving a group is a write operation. Run it only when the user explicitly asks to archive a group. It moves coordination data under the configured coord root's `archive/` directory; it does not delete data.
+Archiving one group or all groups is a write operation. Run it only when the user explicitly asks to archive. It moves coordination data under the configured coord root's `archive/` directory; it does not delete data.
 
 ## Session Identity
 
@@ -62,6 +62,7 @@ User-facing commands map to helper commands:
 | `$coord join group-a frontend` | `python3 <coord-skill-dir>/scripts/coord.py join group-a frontend` |
 | user confirms creating missing group during join | `python3 <coord-skill-dir>/scripts/coord.py join group-a frontend --create` |
 | `$coord archive group-a` | `python3 <coord-skill-dir>/scripts/coord.py archive group-a` |
+| `$coord archive-all` | `python3 <coord-skill-dir>/scripts/coord.py archive-all` |
 | `$coord sync` | `python3 <coord-skill-dir>/scripts/coord.py sync --group group-a --agent frontend` |
 | `$coord brief` | `python3 <coord-skill-dir>/scripts/coord.py brief --group group-a` |
 | `$coord status` | `python3 <coord-skill-dir>/scripts/coord.py status --group group-a` |
@@ -86,6 +87,7 @@ The following standalone commands are equivalent to `$coord <subcommand>` forms 
 | `$coord-init <group>` | `$coord init <group>` |
 | `$coord-join <group> <agent>` | `$coord join <group> <agent>` |
 | `$coord-archive <group>` | `$coord archive <group>` |
+| `$coord-archive-all` | `$coord archive-all` |
 | `$coord-sync` | `$coord sync` |
 | `$coord-brief [group]` | `$coord brief` |
 | `$coord-status [group]` | `$coord status` |
@@ -101,11 +103,35 @@ The following standalone commands are equivalent to `$coord <subcommand>` forms 
 
 All standalone command skills must still follow this main coord protocol and safety boundary.
 
+## Record Final State
+
+Coord records are durable shared state, not a transcript of the conversation. Before writing `note`, `decision`, `answer`, or `handoff`, first filter the current conversation down to the final effective outcome.
+
+Record only:
+
+- final findings, final review verdicts, completed progress, verification results, current valid risks, current blockers, and stable agreements;
+- the latest stable version when a topic changed across several discussion turns;
+- obsolete context only when another agent needs it to avoid following a superseded result, and mark it clearly as obsolete in one short sentence.
+
+Do not record:
+
+- reasoning process, negotiation process, drafts, options that were not chosen, temporary review conclusions, superseded judgments, or labels like "revised review conclusion";
+- statements still waiting for user confirmation or another agent's answer;
+- intermediate states that would mislead another session reading the coord record later.
+
+If the content is not stable yet, ask a question, wait, or skip recording until there is a stable result. Use `ask` for unresolved cross-agent dependencies instead of turning uncertainty into a note.
+
+Review record shape:
+
+```text
+reviewed <target>: verdict=<final verdict>; issues=<currently valid issues>; agreed_changes=<stable agreed changes>; residual_risk=<currently valid risk>
+```
+
 ## Record Results
 
 If this session has a current `group=<group>` and `agent=<agent>`, coordination continues to apply even when the next user request does not mention `$coord`.
 
-Before the final response for review, analysis, implementation, verification, investigation, or planning work, write a concise coordination record unless the user explicitly says not to record it:
+Before the final response for review, analysis, implementation, verification, investigation, or planning work, write a concise final-state coordination record unless the user explicitly says not to record it:
 
 - Use `note` for findings, progress, review results, verification results, and "no issues found" outcomes.
 - Use `decision` only for stable decisions or agreements the group should follow.
@@ -115,6 +141,12 @@ Before the final response for review, analysis, implementation, verification, in
 Do not only reply to the user with review or analysis results. If the result matters to the group, record it in coord first, then mention that it was recorded.
 
 Review-specific default: after reviewing a spec, design doc, code, test, or PR-like change, record a note whether issues were found or not.
+
+## Backfill After Join
+
+If the user asks after `join` to record "刚才", "前面", "当前会话", review results, conclusions, or agreements, inspect the relevant current conversation before and after the join. Do not record only the latest user message or the latest assistant message.
+
+Extract the final stable conclusions using the Record Final State rule. If the pre-join conversation contains several versions of the same review result or agreement, record the last stable version only. If the final conclusion is unclear from the current conversation, ask one concise clarification before writing.
 
 Examples:
 
@@ -131,6 +163,8 @@ Map clear natural language to commands:
 - "同步一下" -> sync.
 - "看一下协调状态" -> status or sync.
 - "归档 group-a" -> archive `group-a`.
+- "归档所有协作组" -> archive-all.
+- "把刚才的 review 结果记录下来" -> inspect current conversation, extract final stable review result, then note.
 - "问后端接口错误码怎么处理" -> ask `@backend`.
 - "回答 q-0001 ..." -> answer.
 - "记录一个决策 ..." -> decision.
@@ -150,6 +184,7 @@ If join fails because the group does not exist, tell the user the group is missi
 - Answer only questions targeted to the current agent or `@all`; repeated answers are rejected.
 - Use `handoff` before ending a substantial task or switching topics.
 - Record task results before final response when current identity is set, including review results with no findings.
+- Record final effective state only; do not write intermediate or superseded conversation states.
 - Check active claims before editing files; if there is an overlap, stop and explain the conflict.
 - Use project-relative paths in `claim --files`; never use absolute paths or `..`. Ambiguous glob overlaps are treated as conflicts.
 - Do not modify another agent's `agents/<agent>.md`.

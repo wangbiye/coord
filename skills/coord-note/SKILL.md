@@ -22,3 +22,5 @@ python3 <coord-skill-dir>/scripts/coord.py note --group <group> --agent <agent> 
 ```
 
 用 note 记录发现、进展、review 结果、验证结果，以及“没有发现问题”的结果。
+
+记录前先按主协议的 Record Final State 规则筛选：只写最终有效结论、当前状态和仍有效风险，不写推理过程、协商过程、草稿、被推翻的 review 结论或“修订审查结论”这类中间态。

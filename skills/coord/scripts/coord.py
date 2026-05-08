@@ -36,7 +36,7 @@ def timestamp_slug():
 
 
 def root_dir():
-    configured = os.environ.get("COORD_ROOT") or os.environ.get("CODEX_COORD_ROOT")
+    configured = os.environ.get("COORD_ROOT")
     return Path(configured or DEFAULT_ROOT).expanduser().resolve()
 
 
@@ -344,6 +344,27 @@ def create_group(root, group):
     return False
 
 
+def active_group_names(root):
+    groups_dir = root / "groups"
+    if not groups_dir.exists():
+        return []
+    return sorted(path.name for path in groups_dir.iterdir() if path.is_dir() and (path / "manifest.json").exists())
+
+
+def archive_group(root, group):
+    paths = require_group(root, group)
+    archive_root = ensure_inside(root, root / "archive")
+    archive_root.mkdir(parents=True, exist_ok=True)
+    base_name = f"{group}-{timestamp_slug()}"
+    target = ensure_inside(root, archive_root / base_name)
+    suffix = 1
+    while target.exists():
+        target = ensure_inside(root, archive_root / f"{base_name}-{suffix}")
+        suffix += 1
+    shutil.move(str(paths["base"]), str(target))
+    return target
+
+
 def cmd_join(args):
     root = root_dir()
     validate_name("agent", args.agent)
@@ -375,17 +396,23 @@ def cmd_archive(args):
     root = root_dir()
     validate_name("group", args.group)
     with locked(root, args.group):
-        paths = require_group(root, args.group)
-        archive_root = ensure_inside(root, root / "archive")
-        archive_root.mkdir(parents=True, exist_ok=True)
-        base_name = f"{args.group}-{timestamp_slug()}"
-        target = ensure_inside(root, archive_root / base_name)
-        suffix = 1
-        while target.exists():
-            target = ensure_inside(root, archive_root / f"{base_name}-{suffix}")
-            suffix += 1
-        shutil.move(str(paths["base"]), str(target))
+        target = archive_group(root, args.group)
         print(f"archived {args.group} to {target}")
+
+
+def cmd_archive_all(args):
+    root = root_dir()
+    groups = active_group_names(root)
+    if not groups:
+        print("no active groups to archive")
+        return
+    for group in groups:
+        with locked(root, group):
+            paths = group_paths(root, group)
+            if not paths["manifest"].exists():
+                continue
+            target = archive_group(root, group)
+            print(f"archived {group} to {target}")
 
 
 def cmd_note(args):
@@ -634,6 +661,9 @@ def build_parser():
     archive = subparsers.add_parser("archive")
     archive.add_argument("group")
     archive.set_defaults(func=cmd_archive)
+
+    archive_all = subparsers.add_parser("archive-all")
+    archive_all.set_defaults(func=cmd_archive_all)
 
     sync = subparsers.add_parser("sync")
     add_context_args(sync)

@@ -22,3 +22,5 @@ python3 <coord-skill-dir>/scripts/coord.py answer --group <group> --agent <agent
 ```
 
 只有目标 agent 可以回答；如果问题目标是 `@all`，任意 agent 都可以回答。重复回答会被拒绝。
+
+回答内容只写最终答案和必要约束，不写重新思考、协商过程、候选方案或已被推翻的中间态。

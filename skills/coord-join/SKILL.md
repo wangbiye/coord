@@ -26,3 +26,5 @@ python3 <coord-skill-dir>/scripts/coord.py join <group> <agent> --create
 ```
 
 成功加入后，记住当前会话身份：`group=<group>` 和 `agent=<agent>`。
+
+如果用户随后要求把“刚才”“前面”“当前会话”的 review 结果、结论或约定记录下来，必须回看当前会话中 join 之前和之后的相关内容，提炼最终稳定结论；不能只记录最近一条消息，也不能记录中间态。

@@ -52,11 +52,13 @@ class CoordCliTest(unittest.TestCase):
         self.assertIn("frontend", manifest["agents"])
         self.assertTrue((self.root / "groups/group-a/agents/frontend.md").exists())
 
-    def test_legacy_codex_root_env_var_is_still_supported(self):
-        legacy_root = Path(self.tmp.name) / "legacy-root"
+    def test_only_coord_root_env_var_controls_default_root(self):
+        default_home = Path(self.tmp.name) / "home"
+        unrelated_root = Path(self.tmp.name) / "unrelated-root"
         env = os.environ.copy()
         env.pop("COORD_ROOT", None)
-        env["CODEX_COORD_ROOT"] = str(legacy_root)
+        env["HOME"] = str(default_home)
+        env["OTHER_COORD_ROOT"] = str(unrelated_root)
 
         result = subprocess.run(
             [sys.executable, str(SCRIPT), "init", "group-a"],
@@ -66,7 +68,8 @@ class CoordCliTest(unittest.TestCase):
         )
 
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertTrue((legacy_root / "groups/group-a/manifest.json").exists())
+        self.assertTrue((default_home / ".coord/groups/group-a/manifest.json").exists())
+        self.assertFalse((unrelated_root / "groups/group-a/manifest.json").exists())
 
     def test_join_missing_group_fails_without_create_flag(self):
         result = self.run_cli("join", "group-a", "frontend", ok=False)
@@ -224,6 +227,45 @@ class CoordCliTest(unittest.TestCase):
     def test_archive_missing_group_fails_without_creating_archive(self):
         result = self.run_cli("archive", "missing-group", ok=False)
         self.assertIn("group does not exist: missing-group", result.stderr)
+        self.assertFalse((self.root / "archive").exists())
+
+    def test_archive_all_moves_all_active_groups_and_ignores_non_groups(self):
+        self.run_cli("init", "group-a")
+        self.run_cli("join", "group-a", "frontend")
+        self.run_cli("note", "--group", "group-a", "--agent", "frontend", "准备归档 A")
+        self.run_cli("init", "group-b")
+        self.run_cli("join", "group-b", "backend")
+        self.run_cli("note", "--group", "group-b", "--agent", "backend", "准备归档 B")
+        (self.root / "groups/broken").mkdir(parents=True)
+
+        archive = self.run_cli("archive-all")
+
+        self.assertIn("archived group-a to", archive.stdout)
+        self.assertIn("archived group-b to", archive.stdout)
+        self.assertNotIn("broken", archive.stdout)
+        self.assertFalse((self.root / "groups/group-a").exists())
+        self.assertFalse((self.root / "groups/group-b").exists())
+        self.assertTrue((self.root / "groups/broken").exists())
+
+        archive_root = self.root / "archive"
+        archived_a = list(archive_root.glob("group-a-*"))
+        archived_b = list(archive_root.glob("group-b-*"))
+        self.assertEqual(len(archived_a), 1)
+        self.assertEqual(len(archived_b), 1)
+        self.assertTrue((archived_a[0] / "manifest.json").exists())
+        self.assertTrue((archived_a[0] / "events.jsonl").exists())
+        self.assertTrue((archived_a[0] / "agents/frontend.md").exists())
+        self.assertTrue((archived_b[0] / "manifest.json").exists())
+        self.assertTrue((archived_b[0] / "events.jsonl").exists())
+        self.assertTrue((archived_b[0] / "agents/backend.md").exists())
+
+        groups = self.run_cli("list", "groups")
+        self.assertEqual("(none)", groups.stdout.strip())
+
+    def test_archive_all_reports_when_no_active_groups_exist(self):
+        archive = self.run_cli("archive-all")
+
+        self.assertEqual("no active groups to archive", archive.stdout.strip())
         self.assertFalse((self.root / "archive").exists())
 
     def test_missing_group_write_commands_do_not_leave_residual_group_dirs(self):
