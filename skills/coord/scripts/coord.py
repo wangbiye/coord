@@ -22,6 +22,44 @@ QUESTION_RE = re.compile(r"^q-\d{4}$")
 WINDOWS_DRIVE_RE = re.compile(r"^[A-Za-z]:")
 GLOB_CHARS = set("*?[")
 
+BUILTIN_ROLE_PROFILES = {
+    "reviewer": "\n".join(
+        [
+            "- reviews spec, plan, code, tests, and delivery results.",
+            "- In spec/plan phases, checks requirement completeness, internal consistency, edge cases, risks, acceptance criteria, and execution clarity.",
+            "- In code phases, checks bugs, regressions, API contracts, test gaps, maintainability, and whether user requirements are met.",
+            "- Does not edit files by default unless the user explicitly asks.",
+            "- Leads with blocking findings and suggestions ordered by severity, and records a coord note even when there are no blocking issues.",
+        ]
+    ),
+    "executor": "\n".join(
+        [
+            "- executes changes from confirmed specs, plans, user requests, or reviewer feedback.",
+            "- In spec/plan phases, updates the document until reviewer feedback is resolved.",
+            "- In code phases, implements, fixes, tests, and verifies the requested changes.",
+            "- Starts by syncing coordination state and claims file ranges before edits when needed.",
+            "- Stops for confirmation when requirements change, plans conflict, cross-agent dependencies appear, or a risky operation is needed.",
+            "- Records the change summary, verification result, and remaining risk before handing work back for review.",
+        ]
+    ),
+    "frontend": "\n".join(
+        [
+            "- Executes frontend work with focus on UI, interaction flow, state changes, responsive behavior, accessibility, and visual consistency.",
+            "- In spec/plan phases, defines user-visible behavior, feedback states, page states, edge cases, and acceptance criteria.",
+            "- In code phases, implements frontend changes and verifies the real interface behavior where possible.",
+            "- Syncs before starting and records progress, verification, blockers, and remaining risks in coord.",
+        ]
+    ),
+    "backend": "\n".join(
+        [
+            "- Executes backend work with focus on API contracts, data models, permissions, error handling, idempotency, compatibility, migrations, and test coverage.",
+            "- In spec/plan phases, defines interface boundaries, data flow, failure cases, and validation strategy.",
+            "- In code phases, implements backend changes, tests them, and verifies contract consistency.",
+            "- Syncs before starting and records progress, verification, blockers, and remaining risks in coord.",
+        ]
+    ),
+}
+
 
 class CoordError(Exception):
     pass
@@ -317,6 +355,100 @@ def read_agent_summaries(paths):
     return summaries
 
 
+def builtin_role_for_agent(agent):
+    if agent == "executer":
+        raise CoordError("unsupported agent name: executer; use executor")
+    return agent if agent in BUILTIN_ROLE_PROFILES else None
+
+
+def role_data_for_join(agent, existing, timestamp):
+    role = builtin_role_for_agent(agent)
+    if existing and existing.get("role_source") == "custom":
+        return {
+            "role": existing.get("role", role or agent),
+            "role_source": "custom",
+            "role_profile": existing.get("role_profile", ""),
+            "role_updated_at": existing.get("role_updated_at", timestamp),
+        }
+    if role:
+        return {
+            "role": role,
+            "role_source": "builtin",
+            "role_profile": BUILTIN_ROLE_PROFILES[role],
+            "role_updated_at": existing.get("role_updated_at") if existing else timestamp,
+        }
+    return {
+        "role": existing.get("role") if existing else None,
+        "role_source": existing.get("role_source") if existing else None,
+        "role_profile": existing.get("role_profile", "") if existing else "",
+        "role_updated_at": existing.get("role_updated_at") if existing else None,
+    }
+
+
+def compact_role_data(data):
+    return {key: value for key, value in data.items() if value not in {None, ""}}
+
+
+def render_role_profile(agent, data):
+    role = data.get("role")
+    source = data.get("role_source")
+    profile = data.get("role_profile")
+    if not profile:
+        return (
+            f"Agent: {agent}\n"
+            "Role: (none)\n"
+            "Source: none\n"
+            "Role Instructions:\n"
+            "(none recorded)"
+        )
+    return (
+        f"Agent: {agent}\n"
+        f"Role: {role or '(none)'}\n"
+        f"Source: {source or 'custom'}\n"
+        "Role Instructions:\n"
+        f"{profile}"
+    )
+
+
+def role_section(agent, data):
+    return "\n## Role Profile\n\n" + render_role_profile(agent, data) + "\n"
+
+
+def upsert_agent_role_section(root, group, agent, data, joined_at=None):
+    summary = agent_file(root, group, agent)
+    if summary.exists():
+        content = summary.read_text()
+    else:
+        joined_line = f"Joined group `{group}`"
+        if joined_at:
+            joined_line += f" at {joined_at}"
+        content = f"# Agent {agent}\n\n{joined_line}.\n"
+
+    section = role_section(agent, data).rstrip() + "\n"
+    if "\n## Role Profile\n" in content:
+        content = re.sub(r"\n## Role Profile\n\n.*?(?=\n## |\Z)", "\n" + section, content, flags=re.S)
+    else:
+        if not content.endswith("\n"):
+            content += "\n"
+        content += section
+    summary.write_text(content)
+
+
+def print_join_role_card(agent, role_data):
+    source = role_data.get("role_source")
+    profile = role_data.get("role_profile")
+    if source == "builtin":
+        print(f"matched built-in role: {role_data.get('role')}")
+    elif source == "custom":
+        print(f"using custom role: {role_data.get('role')}")
+    else:
+        print("no built-in role matched")
+    print()
+    print(render_role_profile(agent, role_data))
+    print()
+    print("If this role is not right for the current task, describe the adjustment; after checking it against coord safety boundaries and current group decisions, record it with the role command.")
+
+
 def cmd_init(args):
     root = root_dir()
     validate_name("group", args.group)
@@ -367,6 +499,7 @@ def archive_group(root, group):
 
 def cmd_join(args):
     root = root_dir()
+    builtin_role_for_agent(args.agent)
     validate_name("agent", args.agent)
     with locked(root, args.group):
         paths = group_paths(root, args.group)
@@ -379,17 +512,21 @@ def cmd_join(args):
         manifest.setdefault("agents", {})
         existing = manifest["agents"].get(args.agent)
         timestamp = now_iso()
+        role_data = role_data_for_join(args.agent, existing, timestamp)
         manifest["agents"][args.agent] = {
             "joined_at": existing.get("joined_at") if existing else timestamp,
             "last_seen_at": timestamp,
+            **compact_role_data(role_data),
         }
         write_json(root, paths["manifest"], manifest)
         summary = agent_file(root, args.group, args.agent)
         if not summary.exists():
             summary.write_text(f"# Agent {args.agent}\n\nJoined group `{args.group}` at {timestamp}.\n")
+        upsert_agent_role_section(root, args.group, args.agent, role_data, joined_at=timestamp)
         append_event(root, args.group, "join", args.agent, text=f"joined group {args.group}")
         print(f"joined {args.group} as {args.agent}")
         print(f"current identity: group={args.group} agent={args.agent}")
+        print_join_role_card(args.agent, role_data)
 
 
 def cmd_archive(args):
@@ -423,6 +560,37 @@ def cmd_note(args):
         append_event(root, args.group, "note", args.agent, text=text)
         append_text(root, agent_file(root, args.group, args.agent), f"\n## Note {now_iso()}\n\n{text}\n")
         print(f"noted for {args.group}/{args.agent}")
+
+
+def cmd_role(args):
+    root = root_dir()
+    builtin_role_for_agent(args.agent)
+    with locked(root, args.group):
+        paths = require_group(root, args.group)
+        manifest = load_manifest(paths)
+        agents = manifest.setdefault("agents", {})
+        existing = agents.get(args.agent)
+        if existing is None:
+            raise CoordError(f"agent not joined: {args.agent}")
+        profile = " ".join(args.text).strip()
+        if not profile:
+            raise CoordError("role profile is required")
+        timestamp = now_iso()
+        role_data = {
+            "role": existing.get("role") or builtin_role_for_agent(args.agent) or args.agent,
+            "role_source": "custom",
+            "role_profile": profile,
+            "role_updated_at": timestamp,
+        }
+        agents[args.agent] = {
+            **existing,
+            "last_seen_at": timestamp,
+            **role_data,
+        }
+        write_json(root, paths["manifest"], manifest)
+        upsert_agent_role_section(root, args.group, args.agent, role_data, joined_at=existing.get("joined_at"))
+        append_event(root, args.group, "role", args.agent, text=f"updated role profile for {args.agent}")
+        print(f"recorded role profile for {args.group}/{args.agent}")
 
 
 def cmd_ask(args):
@@ -556,6 +724,10 @@ def cmd_sync(args):
         print(f"Agent: {args.agent}")
         print("Agents: " + (", ".join(sorted(manifest.get("agents", {}).keys())) or "(none)"))
 
+        print("\n## Current Agent Profile")
+        agent_data = manifest.get("agents", {}).get(args.agent, {})
+        print(render_role_profile(args.agent, agent_data))
+
         print("\n## Open Questions For This Agent")
         mine = [q for q in questions if q.get("status", "open") == "open" and q.get("to") in {args.agent, "all"}]
         print("\n".join(render_question(q) for q in mine) if mine else "(none)")
@@ -583,6 +755,17 @@ def cmd_brief(args):
         print("# Coord Brief")
         print(f"Group: {args.group}")
         print("Agents: " + (", ".join(sorted(manifest.get("agents", {}).keys())) or "(none)"))
+
+        print("\n## Agent Profiles")
+        agents = manifest.get("agents", {})
+        if agents:
+            for agent in sorted(agents):
+                data = agents[agent]
+                role = data.get("role") or "(none)"
+                source = data.get("role_source") or "none"
+                print(f"- @{agent}: role={role} source={source}")
+        else:
+            print("(none)")
 
         print("\n## Open Questions")
         open_questions = [q for q in questions if q.get("status", "open") == "open"]
@@ -686,6 +869,11 @@ def build_parser():
     add_context_args(note)
     note.add_argument("text", nargs="+")
     note.set_defaults(func=cmd_note)
+
+    role = subparsers.add_parser("role")
+    add_context_args(role)
+    role.add_argument("text", nargs="+")
+    role.set_defaults(func=cmd_role)
 
     ask = subparsers.add_parser("ask")
     add_context_args(ask)

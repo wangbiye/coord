@@ -1,6 +1,6 @@
 # Coord
 
-`$coord` 是一个本地异步协作 skill，用来让多个 AI agent 会话通过本地文件共享状态、提问、回答、记录决策、认领文件范围和交接进展。
+`$coord` 是一个本地异步协作 skill，用来让多个 AI agent 会话通过本地文件共享状态、角色定位、提问、回答、记录决策、认领文件范围和交接进展。
 
 它不是实时聊天系统，也不会主动打断其他会话。它更像一个本地留言板：一个会话写入信息，另一个会话通过 `sync` 读取。
 
@@ -8,6 +8,7 @@
 
 - 多个 agent 会话并行处理同一个项目。
 - 需要明确谁负责哪些文件或任务。
+- 需要让 `reviewer`、`executor`、`frontend`、`backend` 这类常用身份在 join 后获得稳定角色定位。
 - 需要把跨会话问题、回答、决策和交接记录留在本地。
 - 需要异步协作，但不想引入远程服务、数据库或外部 API。
 
@@ -86,9 +87,21 @@ COORD_ROOT=/tmp/coord-test python3 skills/coord/scripts/coord.py list groups
 
 - `group`：协作组，是隔离边界。不同 group 默认互不共享。
 - `agent`：某个 AI agent 会话在 group 里的身份，例如 `frontend`、`backend`、`reviewer`。
+- `role`：agent 的工作方式。`reviewer`、`executor`、`frontend`、`backend` 会在 join 时自动匹配内置角色卡；用户也可以在 join 后沟通调整并记录成自定义角色卡。
 - `event`：协作事件，例如 note、question、answer、decision、claim、handoff。
 
 一个 group 可以有多个 agent，不限两个会话。
+
+## 内置角色
+
+`join` 不增加角色参数。agent 名命中以下内置角色时，helper 会自动写入角色卡并在 join/sync 时输出。
+
+- `reviewer`：负责审查 spec、plan、代码、测试和交付结果。spec/plan 阶段重点看需求完整性、方案自洽性、边界条件、风险、验收标准和执行计划清晰度。代码阶段重点看 bug、回归、接口契约、测试缺口、可维护性和用户要求是否满足。默认不改文件，除非用户明确要求；review 结果要按严重程度排序，没有阻塞问题也要记录结论和残余风险。
+- `executor`：负责根据已确认的 spec/plan、用户要求或 reviewer 反馈执行修改。spec/plan 阶段负责更新文档直到 reviewer 反馈解决；代码阶段负责实现、修复、补测试和验证。开始前 sync，必要时 claim 文件范围；遇到需求变化、方案冲突、跨 agent 依赖或风险操作时先确认。完成后记录变更摘要、验证结果和剩余风险。
+- `frontend`：偏执行角色，聚焦 UI、交互流程、状态变化、响应式、可访问性、视觉一致性和真实页面验证。写 spec/plan 时补充用户可见行为、交互反馈、页面状态、边界和验收标准；写代码时负责前端实现和界面验证。
+- `backend`：偏执行角色，聚焦 API 契约、数据模型、权限、错误处理、幂等性、兼容性、迁移风险和测试覆盖。写 spec/plan 时补充接口边界、数据流、异常场景和验证策略；写代码时负责后端实现、测试和契约一致性。
+
+不要使用 `executer`；如果输错，应改为 `executor`。
 
 ## 快速开始
 
@@ -106,6 +119,8 @@ $coord join checkout-flow backend
 ```
 
 如果 group 不存在，`join` 不会自动创建。agent 应先询问是否创建并加入；用户确认后才创建。
+
+如果 agent 名是 `reviewer`、`executor`、`frontend` 或 `backend`，`join` 会输出当前角色指令。用户不同意时，可以直接补充职责；agent 应先判断是否和安全边界或 group 决策冲突，确认后再记录为自定义角色卡。
 
 同步状态：
 
@@ -223,6 +238,14 @@ $coord-note <内容>
 
 记录是共享状态，不是聊天记录。写入 `note`、`decision`、`answer` 或 `handoff` 前，应只提炼最终有效结论、当前状态和仍有效风险；不要记录推理过程、协商过程、草稿、候选方案、被推翻的 review 结论或“修订审查结论”这类中间态。如果用户在 join 后要求记录“刚才”“前面”“当前会话”的 review 结果、结论或约定，agent 必须回看当前会话中 join 前后的相关内容，记录最后稳定版本，不能只取最近一条消息。
 
+调整角色卡：
+
+```text
+$coord role <确认后的角色定位>
+```
+
+不要在 `join` 上增加角色参数。角色卡应在 join 后由用户和 agent 沟通提炼；agent 确认没有冲突后再写入。不要使用 `executer`，应使用 `executor`。
+
 提问：
 
 ```text
@@ -316,6 +339,9 @@ $coord-archive-all
 归档 checkout-flow
 归档所有协作组
 把刚才的 review 结果记录下来
+角色改成只审查 spec/plan，不审查代码
+executor 已完成
+reviewer 已回复
 ```
 
 语义不明确时，agent 应先问一个澄清问题，不应该猜。
@@ -349,6 +375,21 @@ $coord claim "review 登录接口 contract 和测试" --files "src/api/login.ts,
 $coord note "reviewed login contract and tests: no blocking issues found; residual risk is manual end-to-end usage not exercised"
 ```
 
+reviewer / executor 往复：
+
+```text
+$coord join checkout-flow executor
+# executor 写 spec/plan 或代码后记录 note/handoff
+
+$coord join checkout-flow reviewer
+executor 已完成
+# reviewer sync 后审查 executor 最新结果，并记录 review note
+
+# 回到 executor 会话
+reviewer 已完成
+# executor sync 后读取 reviewer 最新结论，继续修改或报告无须处理
+```
+
 claim 冲突时先沟通：
 
 ```text
@@ -358,7 +399,9 @@ $coord ask @frontend 我需要改 src/login/form.ts 接口调用，能否释放�
 ## 人应该做什么
 
 - 给每个会话指定 group 和 agent。
+- 常用身份优先使用 `reviewer`、`executor`、`frontend`、`backend`；不要使用 `executer`。
 - 在关键节点触发 `sync`、`ask`、`handoff`。
+- 如果 join 后的角色定位不符合当前任务，直接说明要调整的职责。
 - 对分工不清或 claim 冲突做裁决。
 - 不手动编辑 coord 数据目录里的 JSON/JSONL 文件。
 - 不把密钥、token、隐私信息写入 `$coord`。
@@ -368,7 +411,9 @@ $coord ask @frontend 我需要改 src/login/form.ts 接口调用，能否释放�
 - 解析 `$coord` 和明确的自然语言触发。
 - 通过 helper 脚本读写协调数据。
 - 已加入 group 后，开始 review、分析、实现、验证、排查、规划前先 `sync`。
+- 遵守 join/sync 输出的当前角色卡；用户调整职责后，确认无冲突再用 `role` 记录。
 - 跨 agent 依赖用 `ask`，不要猜。
+- 听到“xxx 已完成”或“xxx 已回复”时先 `sync`，找到相关记录后再按当前角色继续；找不到记录时不要编造。
 - 阶段性完成后写 `note` 或 `handoff`。
 - review 或分析任务完成后，先写 `note` 记录结果，再回复用户；没有发现问题也要记录。
 - 回答问题必须用 `answer q-id`。

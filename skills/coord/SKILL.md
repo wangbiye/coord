@@ -1,6 +1,6 @@
 ---
 name: coord
-description: 当用户输入 $coord 或 $coord-* 命令，想协调多个 AI agent 会话、加入或同步协作组、记录笔记、提问或回答、记录决策、认领范围、释放认领、归档一个或所有协作组，或交接工作时使用；已加入协作组的会话完成需要组内可见的工作结果时也使用。
+description: 当用户输入 $coord 或 $coord-* 命令，想协调多个 AI agent 会话、加入或同步协作组、记录或调整角色卡、记录笔记、提问或回答、记录决策、认领范围、释放认领、归档一个或所有协作组，或交接工作时使用；已加入协作组的会话完成需要组内可见的工作结果时也使用。
 ---
 
 # Coord
@@ -15,7 +15,7 @@ Allowed write scope for this skill:
 ${COORD_ROOT:-~/.coord}/**
 ```
 
-Writing coordination state is allowed only when the user explicitly uses `$coord` write commands or clearly asks to join, note, ask, answer, decide, claim, release, archive, or hand off coordination state. This does not authorize project file edits, git writes, process cleanup, dependency installs, databases, Lark, or external APIs.
+Writing coordination state is allowed only when the user explicitly uses `$coord` write commands or clearly asks to join, adjust a role card, note, ask, answer, decide, claim, release, archive, or hand off coordination state. This does not authorize project file edits, git writes, process cleanup, dependency installs, databases, Lark, or external APIs.
 
 Archiving one group or all groups is a write operation. Run it only when the user explicitly asks to archive. It moves coordination data under the configured coord root's `archive/` directory; it does not delete data.
 
@@ -33,6 +33,27 @@ The helper script is stateless between invocations. For commands that require id
 If identity is missing, only run `init`, `join`, `list groups`, or `brief --group <group>`. Otherwise ask the user which group and agent this session should use.
 
 Do not reuse the same agent name for two live sessions unless the user explicitly chooses that.
+
+## Role Profiles
+
+`agent` identifies the current session. `role` describes how that session should work. Users do not need to manage this distinction: `join group-a reviewer` should both set `agent=reviewer` and, because `reviewer` is a built-in role, attach the reviewer role profile.
+
+Built-in role names:
+
+- `reviewer`: reviews spec, plan, code, tests, and delivery results. In spec/plan phases, check requirement completeness, consistency, risks, acceptance criteria, and execution clarity. In code phases, check bugs, regressions, API contracts, test gaps, maintainability, and whether user requirements are met. Do not edit files by default unless the user explicitly asks. Record a final review note even when there are no blocking issues.
+- `executor`: executes changes from confirmed specs, plans, user requests, or reviewer feedback. In spec/plan phases, update the document until reviewer feedback is resolved. In code phases, implement, fix, test, and verify. Stop for confirmation when requirements change, plans conflict, cross-agent dependencies appear, or risky operations are needed. Record change summary, verification result, and remaining risk before handing back for review.
+- `frontend`: executes frontend work with focus on UI, interaction flow, state changes, responsive behavior, accessibility, and visual consistency. In spec/plan phases, define user-visible behavior, feedback states, page states, edge cases, and acceptance criteria. In code phases, implement frontend changes and verify real interface behavior where possible.
+- `backend`: executes backend work with focus on API contracts, data models, permissions, error handling, idempotency, compatibility, migrations, and test coverage. In spec/plan phases, define interface boundaries, data flow, failure cases, and validation strategy. In code phases, implement backend changes, tests, and contract verification.
+
+Do not use `executer`. If the user types it, tell them to use `executor`.
+
+After `join`, read the helper's role output aloud in concise form. If the user adjusts the role, check that the adjustment does not conflict with coord safety boundaries or stable group decisions, then record it:
+
+```bash
+python3 <coord-skill-dir>/scripts/coord.py role --group <group> --agent <agent> "<confirmed role profile>"
+```
+
+`sync` prints the current agent role profile. Treat it as active instructions for this session.
 
 ## Helper
 
@@ -69,6 +90,7 @@ User-facing commands map to helper commands:
 | `$coord list groups` | `python3 <coord-skill-dir>/scripts/coord.py list groups` |
 | `$coord list agents` | `python3 <coord-skill-dir>/scripts/coord.py list agents --group group-a` |
 | `$coord note "text"` | `python3 <coord-skill-dir>/scripts/coord.py note --group group-a --agent frontend "text"` |
+| `$coord role "text"` | `python3 <coord-skill-dir>/scripts/coord.py role --group group-a --agent frontend "text"` |
 | `$coord ask @backend "text"` | `python3 <coord-skill-dir>/scripts/coord.py ask --group group-a --agent frontend @backend "text"` |
 | `$coord answer q-0001 "text"` | `python3 <coord-skill-dir>/scripts/coord.py answer --group group-a --agent frontend q-0001 "text"` |
 | `$coord decision "text"` | `python3 <coord-skill-dir>/scripts/coord.py decision --group group-a --agent frontend "text"` |
@@ -165,13 +187,18 @@ Map clear natural language to commands:
 - "归档 group-a" -> archive `group-a`.
 - "归档所有协作组" -> archive-all.
 - "把刚才的 review 结果记录下来" -> inspect current conversation, extract final stable review result, then note.
+- "角色改成 ..." or "这个角色应该 ..." -> inspect for conflicts, then record the confirmed role profile with `role`.
 - "问后端接口错误码怎么处理" -> ask `@backend`.
 - "回答 q-0001 ..." -> answer.
 - "记录一个决策 ..." -> decision.
 - "认领 ..." -> claim.
 - "交接一下" -> handoff.
+- "`<agent>` 已完成" -> sync, inspect the latest effective note/handoff/decision/claim activity from that agent, then continue according to the current role. A reviewer should review the completed work; an executor should apply required changes or report no action needed.
+- "`<agent>` 已回复" -> sync, inspect the latest answer by that agent relevant to the current agent, then continue according to the current role.
 
 If target, group, agent, question id, or claim files are ambiguous, ask one concise clarification before writing.
+
+For "`<agent>` 已完成" or "`<agent>` 已回复", if sync does not show a relevant record, do not infer one. Say that no matching coord record was found and ask the user to identify the target or ask the other agent to write a note, handoff, or answer.
 
 If join fails because the group does not exist, tell the user the group is missing and ask whether to create it and join. Only after confirmation run join with `--create`. Do not silently create a group from a possibly mistyped name.
 
@@ -179,6 +206,7 @@ If join fails because the group does not exist, tell the user the group is missi
 
 - Start code work with `sync` when current identity is set.
 - Start review, analysis, implementation, verification, investigation, or planning work with `sync` when current identity is set.
+- Follow the current role profile shown by `join` and `sync`; when the user changes it, record the confirmed version with `role`.
 - Use `ask` for cross-agent dependencies; do not guess another agent's decision.
 - Use `answer q-id` for answers; do not bury answers in notes.
 - Answer only questions targeted to the current agent or `@all`; repeated answers are rejected.

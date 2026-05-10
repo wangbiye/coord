@@ -85,6 +85,67 @@ class CoordCliTest(unittest.TestCase):
         self.assertEqual(manifest["group"], "group-a")
         self.assertIn("frontend", manifest["agents"])
 
+    def test_join_builtin_role_records_profile_and_prints_role_card(self):
+        self.run_cli("init", "group-a")
+
+        join = self.run_cli("join", "group-a", "reviewer")
+
+        self.assertIn("matched built-in role: reviewer", join.stdout)
+        self.assertIn("Role Instructions", join.stdout)
+        self.assertIn("reviews spec, plan, code, tests, and delivery results", join.stdout)
+        self.assertIn("If this role is not right for the current task", join.stdout)
+        manifest = self.read_json("groups/group-a/manifest.json")
+        reviewer = manifest["agents"]["reviewer"]
+        self.assertEqual("reviewer", reviewer["role"])
+        self.assertEqual("builtin", reviewer["role_source"])
+        self.assertIn("reviews spec, plan, code, tests, and delivery results", reviewer["role_profile"])
+        summary = (self.root / "groups/group-a/agents/reviewer.md").read_text()
+        self.assertIn("## Role Profile", summary)
+        self.assertIn("Role: reviewer", summary)
+
+    def test_join_rejects_executer_and_points_to_executor(self):
+        self.run_cli("init", "group-a")
+
+        result = self.run_cli("join", "group-a", "executer", ok=False)
+
+        self.assertIn("unsupported agent name: executer; use executor", result.stderr)
+        manifest = self.read_json("groups/group-a/manifest.json")
+        self.assertNotIn("executer", manifest["agents"])
+
+    def test_role_command_records_custom_profile_for_current_agent(self):
+        self.run_cli("init", "group-a")
+        self.run_cli("join", "group-a", "reviewer")
+
+        role = self.run_cli(
+            "role",
+            "--group",
+            "group-a",
+            "--agent",
+            "reviewer",
+            "只审查 spec/plan，不审查代码；发现需求歧义时先提问。",
+        )
+
+        self.assertIn("recorded role profile for group-a/reviewer", role.stdout)
+        manifest = self.read_json("groups/group-a/manifest.json")
+        reviewer = manifest["agents"]["reviewer"]
+        self.assertEqual("reviewer", reviewer["role"])
+        self.assertEqual("custom", reviewer["role_source"])
+        self.assertIn("只审查 spec/plan", reviewer["role_profile"])
+        summary = (self.root / "groups/group-a/agents/reviewer.md").read_text()
+        self.assertIn("Source: custom", summary)
+        self.assertIn("只审查 spec/plan", summary)
+
+    def test_sync_prints_current_agent_role_profile(self):
+        self.run_cli("init", "group-a")
+        self.run_cli("join", "group-a", "executor")
+
+        sync = self.run_cli("sync", "--group", "group-a", "--agent", "executor")
+
+        self.assertIn("## Current Agent Profile", sync.stdout)
+        self.assertIn("Role: executor", sync.stdout)
+        self.assertIn("Source: builtin", sync.stdout)
+        self.assertIn("executes changes from confirmed specs, plans, user requests, or reviewer feedback", sync.stdout)
+
     def test_ask_answer_and_sync_are_scoped_to_group_and_agent(self):
         self.run_cli("init", "group-a")
         self.run_cli("init", "group-b")

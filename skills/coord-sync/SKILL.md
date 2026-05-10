@@ -21,4 +21,8 @@ $coord-sync
 python3 <coord-skill-dir>/scripts/coord.py sync --group <group> --agent <agent>
 ```
 
-把输出视为当前协调上下文，并向用户概括可执行事项。
+把输出视为当前协调上下文和当前角色指令，并向用户概括可执行事项。
+
+如果用户说“`<agent>` 已完成”，先同步，再查找该 agent 最近的 note、handoff、decision 或 claim 变化；当前 agent 是 reviewer 时默认开始审查，当前 agent 是 executor 时默认读取结论并继续修改或收尾。
+
+如果用户说“`<agent>` 已回复”，先同步，再查找该 agent 最近且与当前 agent 相关的 answer；找到后按当前角色继续。找不到相关记录时，不要猜，说明 coord 中没有看到对应完成记录或回复。

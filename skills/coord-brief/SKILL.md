@@ -22,4 +22,4 @@ $coord-brief <group>
 python3 <coord-skill-dir>/scripts/coord.py brief --group <group>
 ```
 
-把输出视为当前协调上下文，并向用户概括可执行事项。
+把输出视为当前协调上下文。简报会包含各 agent 的角色摘要；中途加入时先理解这些角色分工，再概括可执行事项。
