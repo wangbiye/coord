@@ -19,11 +19,7 @@ $coord-join <group> <agent>
 python3 <coord-skill-dir>/scripts/coord.py join <group> <agent>
 ```
 
-如果 group 不存在，先告诉用户该 group 缺失，并询问是否创建并加入。只有用户确认后才执行：
-
-```bash
-python3 <coord-skill-dir>/scripts/coord.py join <group> <agent> --create
-```
+如果 group 不存在，helper 会自动创建 group 并加入当前 agent；不要再单独询问用户是否创建。
 
 成功加入后，记住当前会话身份：`group=<group>` 和 `agent=<agent>`。
 

@@ -504,8 +504,6 @@ def cmd_join(args):
     with locked(root, args.group):
         paths = group_paths(root, args.group)
         if not paths["manifest"].exists():
-            if not args.create:
-                raise CoordError(f"group does not exist: {args.group}")
             create_group(root, args.group)
             print(f"created group {args.group}")
         manifest = load_manifest(paths)

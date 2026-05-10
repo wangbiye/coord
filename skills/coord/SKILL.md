@@ -81,7 +81,6 @@ User-facing commands map to helper commands:
 | --- | --- |
 | `$coord init group-a` | `python3 <coord-skill-dir>/scripts/coord.py init group-a` |
 | `$coord join group-a frontend` | `python3 <coord-skill-dir>/scripts/coord.py join group-a frontend` |
-| user confirms creating missing group during join | `python3 <coord-skill-dir>/scripts/coord.py join group-a frontend --create` |
 | `$coord archive group-a` | `python3 <coord-skill-dir>/scripts/coord.py archive group-a` |
 | `$coord archive-all` | `python3 <coord-skill-dir>/scripts/coord.py archive-all` |
 | `$coord sync` | `python3 <coord-skill-dir>/scripts/coord.py sync --group group-a --agent frontend` |
@@ -200,7 +199,7 @@ If target, group, agent, question id, or claim files are ambiguous, ask one conc
 
 For "`<agent>` 已完成" or "`<agent>` 已回复", if sync does not show a relevant record, do not infer one. Say that no matching coord record was found and ask the user to identify the target or ask the other agent to write a note, handoff, or answer.
 
-If join fails because the group does not exist, tell the user the group is missing and ask whether to create it and join. Only after confirmation run join with `--create`. Do not silently create a group from a possibly mistyped name.
+If the group does not exist during `join`, the helper creates it automatically and joins the current agent. Do not ask for a separate creation confirmation.
 
 ## Working Rules
 

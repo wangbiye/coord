@@ -71,10 +71,14 @@ class CoordCliTest(unittest.TestCase):
         self.assertTrue((default_home / ".coord/groups/group-a/manifest.json").exists())
         self.assertFalse((unrelated_root / "groups/group-a/manifest.json").exists())
 
-    def test_join_missing_group_fails_without_create_flag(self):
-        result = self.run_cli("join", "group-a", "frontend", ok=False)
-        self.assertIn("group does not exist: group-a", result.stderr)
-        self.assertFalse((self.root / "groups/group-a").exists())
+    def test_join_missing_group_creates_group_without_create_flag(self):
+        join = self.run_cli("join", "group-a", "frontend")
+
+        self.assertIn("created group group-a", join.stdout)
+        self.assertIn("joined group-a as frontend", join.stdout)
+        manifest = self.read_json("groups/group-a/manifest.json")
+        self.assertEqual(manifest["group"], "group-a")
+        self.assertIn("frontend", manifest["agents"])
 
     def test_join_missing_group_with_create_flag_initializes_group_and_joins(self):
         join = self.run_cli("join", "group-a", "frontend", "--create")

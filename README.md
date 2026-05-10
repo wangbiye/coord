@@ -118,7 +118,7 @@ $coord join checkout-flow frontend
 $coord join checkout-flow backend
 ```
 
-如果 group 不存在，`join` 不会自动创建。agent 应先询问是否创建并加入；用户确认后才创建。
+如果 group 不存在，`join` 会自动创建 group 并加入当前 agent，不再单独询问。
 
 如果 agent 名是 `reviewer`、`executor`、`frontend` 或 `backend`，`join` 会输出当前角色指令。用户不同意时，可以直接补充职责；agent 应先判断是否和安全边界或 group 决策冲突，确认后再记录为自定义角色卡。
 
@@ -430,9 +430,9 @@ $coord ask @frontend 我需要改 src/login/form.ts 接口调用，能否释放�
 - group 已被 archive。
 - group 目录残缺，没有 `manifest.json`。
 
-### `$coord join` 提示 group 不存在
+### `$coord join` 创建了一个新 group
 
-这是正常保护。确认名字没拼错后，让 agent 创建并加入。
+这是当前默认行为。`join` 的 group 名如果不存在，会直接创建并加入。发现名字拼错时，可以归档拼错的 group 后重新加入正确 group。
 
 ### 问题发出后对方没有反应
 
