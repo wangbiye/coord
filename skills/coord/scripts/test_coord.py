@@ -390,6 +390,60 @@ class CoordCliTest(unittest.TestCase):
         self.assertNotIn("i-0001", executor_sync_after.stdout)
         self.assertNotIn("i-0001", brief_after.stdout)
 
+    def test_retract_and_correct_reject_structural_events(self):
+        self.run_cli("init", "group-a")
+        self.run_cli("join", "group-a", "frontend")
+        self.run_cli("claim", "--group", "group-a", "--agent", "frontend", "--files", "src/**", "任务")
+        events = self.read_jsonl("groups/group-a/events.jsonl")
+        join_event = next(event for event in events if event.get("type") == "join")
+        claim_event = next(event for event in events if event.get("type") == "claim")
+
+        retract_join = self.run_cli(
+            "retract",
+            "--group",
+            "group-a",
+            "--agent",
+            "frontend",
+            join_event["id"],
+            "撤回 join",
+            ok=False,
+        )
+        correct_claim = self.run_cli(
+            "correct",
+            "--group",
+            "group-a",
+            "--agent",
+            "frontend",
+            claim_event["id"],
+            "修正 claim",
+            ok=False,
+        )
+
+        self.assertIn("event cannot be retracted", retract_join.stderr)
+        self.assertIn("event cannot be corrected", correct_claim.stderr)
+
+    def test_correct_replacement_chain_only_shows_latest_version(self):
+        self.run_cli("init", "group-a")
+        self.run_cli("join", "group-a", "reviewer")
+        self.run_cli("note", "--group", "group-a", "--agent", "reviewer", "第一版")
+        first = next(
+            event
+            for event in self.read_jsonl("groups/group-a/events.jsonl")
+            if event.get("type") == "note"
+        )
+        self.run_cli("correct", "--group", "group-a", "--agent", "reviewer", first["id"], "第二版")
+        second = [
+            event
+            for event in self.read_jsonl("groups/group-a/events.jsonl")
+            if event.get("type") == "note"
+        ][-1]
+        self.run_cli("correct", "--group", "group-a", "--agent", "reviewer", second["id"], "第三版")
+
+        brief = self.run_cli("brief", "--group", "group-a")
+        self.assertNotIn("第一版", brief.stdout)
+        self.assertNotIn("第二版", brief.stdout)
+        self.assertIn("第三版", brief.stdout)
+
     def test_archive_moves_group_out_of_active_groups_and_preserves_files(self):
         self.run_cli("init", "group-a")
         self.run_cli("join", "group-a", "frontend")
