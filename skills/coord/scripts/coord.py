@@ -19,6 +19,10 @@ except ImportError:  # pragma: no cover - non-Unix fallback
 DEFAULT_ROOT = Path("~/.coord")
 NAME_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$")
 QUESTION_RE = re.compile(r"^q-\d{4}$")
+EVENT_RE = re.compile(r"^e-\d{4}$")
+IMPACT_RE = re.compile(r"^i-\d{4}$")
+CORRECTABLE_EVENT_TYPES = {"note", "decision", "handoff", "question", "answer"}
+INTERNAL_EVENT_TYPES = {"retract", "impact", "resolve-impact"}
 WINDOWS_DRIVE_RE = re.compile(r"^[A-Za-z]:")
 GLOB_CHARS = set("*?[")
 
@@ -219,6 +223,63 @@ def next_id(records, prefix):
     return f"{prefix}-{max_id + 1:04d}"
 
 
+def validate_event_id(value):
+    if not EVENT_RE.match(value):
+        raise CoordError(f"invalid event id: {value}")
+    return value
+
+
+def validate_impact_id(value):
+    if not IMPACT_RE.match(value):
+        raise CoordError(f"invalid impact id: {value}")
+    return value
+
+
+def event_by_id(events, event_id):
+    for event in events:
+        if event.get("id") == event_id:
+            return event
+    raise CoordError(f"event not found: {event_id}")
+
+
+def effective_event_state(events):
+    retracted = {
+        event.get("target_event_id")
+        for event in events
+        if event.get("type") == "retract" and event.get("target_event_id")
+    }
+    superseded = {
+        event.get("replaces_event_id")
+        for event in events
+        if event.get("replaces_event_id")
+    }
+    resolved_impacts = {
+        event.get("impact_id")
+        for event in events
+        if event.get("type") == "resolve-impact" and event.get("impact_id")
+    }
+    open_impacts = [
+        event
+        for event in events
+        if event.get("type") == "impact"
+        and event.get("impact_id")
+        and event.get("impact_id") not in resolved_impacts
+    ]
+    hidden_event_ids = {event_id for event_id in retracted | superseded if event_id}
+    effective_events = [
+        event
+        for event in events
+        if event.get("id") not in hidden_event_ids
+        and event.get("type") not in INTERNAL_EVENT_TYPES
+    ]
+    return {
+        "hidden_event_ids": hidden_event_ids,
+        "effective_events": effective_events,
+        "open_impacts": open_impacts,
+        "resolved_impacts": resolved_impacts,
+    }
+
+
 def append_event(root, group, event_type, agent, **fields):
     paths = group_paths(root, group)
     event_id = next_id(read_jsonl(paths["events"]), "e")
@@ -237,7 +298,7 @@ def load_manifest(paths):
     return read_json(paths["manifest"], {"group": paths["base"].name, "agents": {}})
 
 
-def current_questions(paths):
+def current_questions(paths, event_state=None):
     states = {}
     order = []
     for record in read_jsonl(paths["questions"]):
@@ -341,6 +402,19 @@ def render_event(event):
     target = event.get("target")
     route = f" -> @{target}" if target else ""
     return f"- {event['id']} {event['type']} @{event.get('agent', '?')}{route}: {text}"
+
+
+def render_effective_agent_summaries(events):
+    summaries = {}
+    for event in events:
+        if event.get("type") not in {"note", "handoff"}:
+            continue
+        text = event.get("text") or event.get("summary") or ""
+        if not text:
+            continue
+        label = "Note" if event.get("type") == "note" else "Handoff"
+        summaries.setdefault(event.get("agent", "?"), []).append(f"## {label} {event['id']}\n\n{text}")
+    return [(agent, "\n\n".join(items)) for agent, items in sorted(summaries.items())]
 
 
 def read_agent_summaries(paths):
@@ -591,6 +665,27 @@ def cmd_role(args):
         print(f"recorded role profile for {args.group}/{args.agent}")
 
 
+def cmd_retract(args):
+    root = root_dir()
+    validate_event_id(args.event_id)
+    with locked(root, args.group):
+        paths = require_group(root, args.group)
+        events = read_jsonl(paths["events"])
+        target = event_by_id(events, args.event_id)
+        if target.get("type") not in CORRECTABLE_EVENT_TYPES:
+            raise CoordError(f"event cannot be retracted: {args.event_id}")
+        reason = " ".join(args.reason).strip()
+        append_event(
+            root,
+            args.group,
+            "retract",
+            args.agent,
+            target_event_id=args.event_id,
+            reason=reason,
+        )
+        print(f"retracted {args.event_id}")
+
+
 def cmd_ask(args):
     root = root_dir()
     target = args.target[1:] if args.target.startswith("@") else args.target
@@ -713,9 +808,10 @@ def cmd_sync(args):
     with locked(root, args.group):
         paths = require_group(root, args.group)
         manifest = load_manifest(paths)
-        questions = current_questions(paths)
+        events = read_jsonl(paths["events"])
+        event_state = effective_event_state(events)
+        questions = current_questions(paths, event_state)
         claims = active_claims(paths)
-        events = read_jsonl(paths["events"])[-10:]
 
         print("# Coord Sync")
         print(f"Group: {args.group}")
@@ -737,8 +833,9 @@ def cmd_sync(args):
         print("\n## Active Claims")
         print("\n".join(render_claim(c) for c in claims) if claims else "(none)")
 
-        print("\n## Recent Events")
-        print("\n".join(render_event(e) for e in events) if events else "(none)")
+        print("\n## Recent Effective Events")
+        recent_events = event_state["effective_events"][-10:]
+        print("\n".join(render_event(e) for e in recent_events) if recent_events else "(none)")
 
 
 def cmd_brief(args):
@@ -746,9 +843,10 @@ def cmd_brief(args):
     with locked(root, args.group):
         paths = require_group(root, args.group)
         manifest = load_manifest(paths)
-        questions = current_questions(paths)
+        events = read_jsonl(paths["events"])
+        event_state = effective_event_state(events)
+        questions = current_questions(paths, event_state)
         claims = active_claims(paths)
-        events = read_jsonl(paths["events"])[-15:]
 
         print("# Coord Brief")
         print(f"Group: {args.group}")
@@ -773,15 +871,16 @@ def cmd_brief(args):
         print("\n".join(render_claim(c) for c in claims) if claims else "(none)")
 
         print("\n## Agent Summaries")
-        summaries = read_agent_summaries(paths)
+        summaries = render_effective_agent_summaries(event_state["effective_events"])
         if summaries:
             for agent, summary in summaries:
                 print(f"\n### {agent}\n{summary}")
         else:
             print("(none)")
 
-        print("\n## Recent Events")
-        print("\n".join(render_event(e) for e in events) if events else "(none)")
+        print("\n## Recent Effective Events")
+        recent_events = event_state["effective_events"][-15:]
+        print("\n".join(render_event(e) for e in recent_events) if recent_events else "(none)")
 
 
 def cmd_status(args):
@@ -872,6 +971,12 @@ def build_parser():
     add_context_args(role)
     role.add_argument("text", nargs="+")
     role.set_defaults(func=cmd_role)
+
+    retract = subparsers.add_parser("retract")
+    add_context_args(retract)
+    retract.add_argument("event_id")
+    retract.add_argument("reason", nargs="+")
+    retract.set_defaults(func=cmd_retract)
 
     ask = subparsers.add_parser("ask")
     add_context_args(ask)

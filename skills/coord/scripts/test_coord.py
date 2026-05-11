@@ -40,6 +40,13 @@ class CoordCliTest(unittest.TestCase):
     def read_json(self, relative):
         return json.loads((self.root / relative).read_text())
 
+    def read_jsonl(self, relative):
+        records = []
+        for line in (self.root / relative).read_text().splitlines():
+            if line.strip():
+                records.append(json.loads(line))
+        return records
+
     def test_init_and_join_create_group_and_agent_manifest(self):
         init = self.run_cli("init", "group-a")
         self.assertIn("created group group-a", init.stdout)
@@ -239,6 +246,45 @@ class CoordCliTest(unittest.TestCase):
 
         brief = self.run_cli("brief", "--group", "group-a")
         self.assertIn("完成登录页入口分析", brief.stdout)
+
+    def test_retract_hides_event_from_sync_brief_and_agent_summaries(self):
+        self.run_cli("init", "group-a")
+        self.run_cli("join", "group-a", "frontend")
+        self.run_cli("note", "--group", "group-a", "--agent", "frontend", "错误结论")
+        note_event = next(
+            event
+            for event in self.read_jsonl("groups/group-a/events.jsonl")
+            if event.get("type") == "note"
+        )
+
+        retract = self.run_cli(
+            "retract",
+            "--group",
+            "group-a",
+            "--agent",
+            "frontend",
+            note_event["id"],
+            "记录有误，未被消费",
+        )
+
+        self.assertIn(f"retracted {note_event['id']}", retract.stdout)
+        sync = self.run_cli("sync", "--group", "group-a", "--agent", "frontend")
+        brief = self.run_cli("brief", "--group", "group-a")
+        self.assertIn("## Recent Effective Events", sync.stdout)
+        self.assertNotIn("错误结论", sync.stdout)
+        self.assertNotIn("错误结论", brief.stdout)
+        self.assertNotIn("retract @frontend", sync.stdout)
+        self.assertNotIn("retract @frontend", brief.stdout)
+
+        events = self.read_jsonl("groups/group-a/events.jsonl")
+        self.assertTrue(any(event["id"] == note_event["id"] for event in events))
+        self.assertTrue(
+            any(
+                event.get("type") == "retract"
+                and event.get("target_event_id") == note_event["id"]
+                for event in events
+            )
+        )
 
     def test_archive_moves_group_out_of_active_groups_and_preserves_files(self):
         self.run_cli("init", "group-a")
