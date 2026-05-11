@@ -342,6 +342,54 @@ class CoordCliTest(unittest.TestCase):
         self.assertIn("answer by backend", sync.stdout)
         self.assertIn("最终回答", sync.stdout)
 
+    def test_impact_targets_agent_until_resolved(self):
+        self.run_cli("init", "group-a")
+        self.run_cli("join", "group-a", "reviewer")
+        self.run_cli("join", "group-a", "executor")
+        self.run_cli("decision", "--group", "group-a", "--agent", "reviewer", "旧决策")
+        decision_event = next(
+            event
+            for event in self.read_jsonl("groups/group-a/events.jsonl")
+            if event.get("type") == "decision"
+        )
+
+        impact = self.run_cli(
+            "impact",
+            "--group",
+            "group-a",
+            "--agent",
+            "reviewer",
+            decision_event["id"],
+            "@executor",
+            "旧决策已被执行，请重新检查相关改动",
+        )
+
+        self.assertIn("created impact i-0001", impact.stdout)
+        executor_sync = self.run_cli("sync", "--group", "group-a", "--agent", "executor")
+        reviewer_sync = self.run_cli("sync", "--group", "group-a", "--agent", "reviewer")
+        brief = self.run_cli("brief", "--group", "group-a")
+        self.assertIn("## Needs Attention", executor_sync.stdout)
+        self.assertIn("i-0001", executor_sync.stdout)
+        self.assertIn("旧决策已被执行，请重新检查相关改动", executor_sync.stdout)
+        self.assertNotIn("i-0001", reviewer_sync.stdout.split("## Needs Attention", 1)[1].split("##", 1)[0])
+        self.assertIn("i-0001", brief.stdout)
+
+        resolved = self.run_cli(
+            "resolve-impact",
+            "--group",
+            "group-a",
+            "--agent",
+            "executor",
+            "i-0001",
+            "已重查，无需改动",
+        )
+
+        self.assertIn("resolved impact i-0001", resolved.stdout)
+        executor_sync_after = self.run_cli("sync", "--group", "group-a", "--agent", "executor")
+        brief_after = self.run_cli("brief", "--group", "group-a")
+        self.assertNotIn("i-0001", executor_sync_after.stdout)
+        self.assertNotIn("i-0001", brief_after.stdout)
+
     def test_archive_moves_group_out_of_active_groups_and_preserves_files(self):
         self.run_cli("init", "group-a")
         self.run_cli("join", "group-a", "frontend")
@@ -438,6 +486,10 @@ class CoordCliTest(unittest.TestCase):
     def test_missing_group_write_commands_do_not_leave_residual_group_dirs(self):
         commands = [
             ("note", "--group", "typo", "--agent", "frontend", "记录"),
+            ("retract", "--group", "typo", "--agent", "frontend", "e-0001", "撤回"),
+            ("correct", "--group", "typo", "--agent", "frontend", "e-0001", "修正"),
+            ("impact", "--group", "typo", "--agent", "frontend", "e-0001", "@backend", "影响"),
+            ("resolve-impact", "--group", "typo", "--agent", "frontend", "i-0001", "解决"),
             ("ask", "--group", "typo", "--agent", "frontend", "@backend", "问题"),
             ("answer", "--group", "typo", "--agent", "backend", "q-0001", "答案"),
             ("decision", "--group", "typo", "--agent", "frontend", "决策"),

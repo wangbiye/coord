@@ -280,6 +280,10 @@ def effective_event_state(events):
     }
 
 
+def next_impact_id(events):
+    return next_id([event for event in events if event.get("impact_id")], "i")
+
+
 def append_event(root, group, event_type, agent, **fields):
     paths = group_paths(root, group)
     event_id = next_id(read_jsonl(paths["events"]), "e")
@@ -405,6 +409,14 @@ def render_question(question):
 def render_claim(claim):
     files = ", ".join(claim.get("files", [])) or "(no files)"
     return f"- {claim['id']} @{claim['agent']}: {claim.get('task', '')} [{files}]"
+
+
+def render_impact(impact):
+    target = impact.get("target", "all")
+    return (
+        f"- {impact['impact_id']} from @{impact.get('agent', '?')} "
+        f"about {impact.get('target_event_id', '?')} to @{target}: {impact.get('text', '')}"
+    )
 
 
 def render_event(event):
@@ -751,6 +763,55 @@ def cmd_correct(args):
         print(f"corrected {args.event_id} with {replacement['id']}")
 
 
+def cmd_impact(args):
+    root = root_dir()
+    validate_event_id(args.event_id)
+    target = args.target[1:] if args.target.startswith("@") else args.target
+    if target != "all":
+        validate_name("agent", target)
+    with locked(root, args.group):
+        paths = require_group(root, args.group)
+        events = read_jsonl(paths["events"])
+        event_by_id(events, args.event_id)
+        impact_id = next_impact_id(events)
+        text = " ".join(args.text).strip()
+        append_event(
+            root,
+            args.group,
+            "impact",
+            args.agent,
+            impact_id=impact_id,
+            target_event_id=args.event_id,
+            target=target,
+            status="open",
+            text=text,
+        )
+        print(f"created impact {impact_id}")
+
+
+def cmd_resolve_impact(args):
+    root = root_dir()
+    validate_impact_id(args.impact_id)
+    with locked(root, args.group):
+        paths = require_group(root, args.group)
+        events = read_jsonl(paths["events"])
+        state = effective_event_state(events)
+        impact = next((item for item in state["open_impacts"] if item.get("impact_id") == args.impact_id), None)
+        if impact is None:
+            raise CoordError(f"open impact not found: {args.impact_id}")
+        text = " ".join(args.text).strip()
+        append_event(
+            root,
+            args.group,
+            "resolve-impact",
+            args.agent,
+            impact_id=args.impact_id,
+            status="resolved",
+            text=text,
+        )
+        print(f"resolved impact {args.impact_id}")
+
+
 def cmd_ask(args):
     root = root_dir()
     target = args.target[1:] if args.target.startswith("@") else args.target
@@ -900,6 +961,14 @@ def cmd_sync(args):
         print("\n## Active Claims")
         print("\n".join(render_claim(c) for c in claims) if claims else "(none)")
 
+        print("\n## Needs Attention")
+        my_impacts = [
+            impact
+            for impact in event_state["open_impacts"]
+            if impact.get("target") in {args.agent, "all"}
+        ]
+        print("\n".join(render_impact(impact) for impact in my_impacts) if my_impacts else "(none)")
+
         print("\n## Recent Effective Events")
         recent_events = event_state["effective_events"][-10:]
         print("\n".join(render_event(e) for e in recent_events) if recent_events else "(none)")
@@ -936,6 +1005,9 @@ def cmd_brief(args):
 
         print("\n## Active Claims")
         print("\n".join(render_claim(c) for c in claims) if claims else "(none)")
+
+        print("\n## Needs Attention")
+        print("\n".join(render_impact(impact) for impact in event_state["open_impacts"]) if event_state["open_impacts"] else "(none)")
 
         print("\n## Agent Summaries")
         summaries = render_effective_agent_summaries(event_state["effective_events"])
@@ -1050,6 +1122,19 @@ def build_parser():
     correct.add_argument("event_id")
     correct.add_argument("text", nargs="+")
     correct.set_defaults(func=cmd_correct)
+
+    impact = subparsers.add_parser("impact")
+    add_context_args(impact)
+    impact.add_argument("event_id")
+    impact.add_argument("target")
+    impact.add_argument("text", nargs="+")
+    impact.set_defaults(func=cmd_impact)
+
+    resolve_impact = subparsers.add_parser("resolve-impact")
+    add_context_args(resolve_impact)
+    resolve_impact.add_argument("impact_id")
+    resolve_impact.add_argument("text", nargs="+")
+    resolve_impact.set_defaults(func=cmd_resolve_impact)
 
     ask = subparsers.add_parser("ask")
     add_context_args(ask)
