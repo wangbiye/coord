@@ -1,63 +1,49 @@
 # Coord
 
-`$coord` 是一个本地异步协作 skill，用来让多个 AI agent 会话通过本地文件共享状态、角色定位、提问、回答、记录决策、认领文件范围和交接进展。
+`coord` 是一个本地异步协作 skill，用来让多个 LLM 会话共享少量协作状态。
 
-它不是实时聊天系统，也不会主动打断其他会话。它更像一个本地留言板：一个会话写入信息，另一个会话通过 `sync` 读取。
+它不是实时聊天，也不会主动通知其他会话。它更像一个本地留言板：一个会话写入状态，另一个会话在需要时同步读取。
 
-## 适用场景
+日常使用很简单：
 
-- 多个 agent 会话并行处理同一个项目。
-- 需要明确谁负责哪些文件或任务。
-- 需要让 `reviewer`、`executor`、`frontend`、`backend` 这类常用身份在 join 后获得稳定角色定位。
-- 需要把跨会话问题、回答、决策和交接记录留在本地。
-- 需要异步协作，但不想引入远程服务、数据库或外部 API。
+1. 每个 LLM 会话先 `join` 到同一个 group。
+2. 用户给不同会话指派任务。
+3. A 做完后，用户去告诉 B：`A 已完成`。
+4. B 处理完后，用户再去告诉 A：`B 已完成`。
 
-## 仓库结构
+底层数据默认写入 `~/.coord`。不要把密钥、token 或隐私信息写进 coord。
 
-```text
-skills/
-  coord/
-    SKILL.md
-    scripts/
-      coord.py
-      test_coord.py
-  coord-init/
-  coord-join/
-  coord-archive/
-  coord-archive-all/
-  coord-sync/
-  coord-brief/
-  coord-status/
-  coord-list-groups/
-  coord-list-agents/
-  coord-note/
-  coord-ask/
-  coord-answer/
-  coord-decision/
-  coord-claim/
-  coord-release/
-  coord-handoff/
-install.sh
-README.md
+## 环境检查
+
+在仓库根目录执行：
+
+```bash
+pwd
+python3 --version
+python3 skills/coord/scripts/coord.py list groups
 ```
 
-`skills/coord/` 是主协议和 helper 脚本。`skills/coord-*` 是独立子命令入口，用于更容易触发和补全。
+确认：
 
-## 安装
+- 当前目录是 `coord-skill` 仓库。
+- 本机有 `python3`。
+- helper 能运行；没有 group 时输出 `(none)` 是正常的。
 
-进入仓库根目录后执行：
+查看当前仓库包含哪些 coord skills：
+
+```bash
+find skills -maxdepth 2 -name SKILL.md | sort
+```
+
+## 如何安装
+
+默认安装到 `~/.agents/skills`：
 
 ```bash
 ./install.sh
 ```
 
-默认安装到：
-
-```text
-~/.agents/skills
-```
-
-也可以指定安装目录：
+指定安装目录：
 
 ```bash
 ./install.sh /path/to/skills
@@ -65,257 +51,194 @@ README.md
 
 安装后，重启或重新加载你的 agent 环境，让它重新发现这些 skills。
 
-安装脚本是同步安装：它会先清理目标目录中的 `coord` 和 `coord-*` skill，再复制当前仓库里的版本，因此删除或重命名命令后不会留下旧入口。它不会清理 `lark-*`、`superpowers`、`blueprinter` 或其他非 coord skill。
+安装脚本会同步安装当前仓库里的 `coord` 和 `coord-*` skills，并清理目标目录里旧的 coord 入口。它不会清理 `lark-*`、`superpowers`、`blueprinter` 或其他非 coord skill。
 
-## 数据目录
-
-默认协调数据写入：
-
-```text
-~/.coord
-```
-
-正常使用时不需要设置环境变量。测试或隔离运行时可以设置：
+升级也是同一个命令：
 
 ```bash
-COORD_ROOT=/tmp/coord-test python3 skills/coord/scripts/coord.py list groups
+./install.sh
 ```
 
-不要把密钥、token、隐私信息写入 `$coord`。
+已有协作数据默认保留在 `~/.coord`，安装 skill 不会删除这些数据。
 
-## 核心概念
+## 日常使用
 
-- `group`：协作组，是隔离边界。不同 group 默认互不共享。
-- `agent`：某个 AI agent 会话在 group 里的身份，例如 `frontend`、`backend`、`reviewer`。
-- `role`：agent 的工作方式。`reviewer`、`executor`、`frontend`、`backend` 会在 join 时自动匹配内置角色卡；用户也可以在 join 后沟通调整并记录成自定义角色卡。
-- `event`：协作事件，例如 note、question、answer、decision、claim、handoff。
-
-一个 group 可以有多个 agent，不限两个会话。
-
-## 内置角色
-
-`join` 不增加角色参数。agent 名命中以下内置角色时，helper 会自动写入角色卡并在 join/sync 时输出。
-
-- `reviewer`：负责审查 spec、plan、代码、测试和交付结果。spec/plan 阶段重点看需求完整性、方案自洽性、边界条件、风险、验收标准和执行计划清晰度。代码阶段重点看 bug、回归、接口契约、测试缺口、可维护性和用户要求是否满足。默认不改文件，除非用户明确要求；review 结果要按严重程度排序，没有阻塞问题也要记录结论和残余风险。
-- `executor`：负责根据已确认的 spec/plan、用户要求或 reviewer 反馈执行修改。spec/plan 阶段负责更新文档直到 reviewer 反馈解决；代码阶段负责实现、修复、补测试和验证。开始前 sync，必要时 claim 文件范围；遇到需求变化、方案冲突、跨 agent 依赖或风险操作时先确认。完成后记录变更摘要、验证结果和剩余风险。
-- `frontend`：偏执行角色，聚焦 UI、交互流程、状态变化、响应式、可访问性、视觉一致性和真实页面验证。写 spec/plan 时补充用户可见行为、交互反馈、页面状态、边界和验收标准；写代码时负责前端实现和界面验证。
-- `backend`：偏执行角色，聚焦 API 契约、数据模型、权限、错误处理、幂等性、兼容性、迁移风险和测试覆盖。写 spec/plan 时补充接口边界、数据流、异常场景和验证策略；写代码时负责后端实现、测试和契约一致性。
-
-不要使用 `executer`；如果输错，应改为 `executor`。
-
-## 快速开始
+### 1. 每个会话先加入同一个 group
 
 第一个会话：
 
 ```text
-$coord init checkout-flow
-$coord join checkout-flow frontend
+$coord join checkout-flow executor
 ```
 
 第二个会话：
 
 ```text
+$coord join checkout-flow reviewer
+```
+
+`join` 的 group 不存在时会自动创建。常用 agent 名：
+
+- `executor`：执行实现、修复、验证。
+- `reviewer`：审查 spec、计划、代码、测试和交付结果。
+- `frontend`：前端实现或审查。
+- `backend`：后端实现或审查。
+
+不要使用 `executer`，应使用 `executor`。
+
+### 2. 用户直接指派任务
+
+在 executor 会话里说：
+
+```text
+实现 checkout-flow 的登录态处理，完成后记录结果。
+```
+
+executor 做完后会记录 note 或 handoff。
+
+### 3. A 做完后去告诉 B
+
+在 reviewer 会话里说：
+
+```text
+executor 已完成
+```
+
+reviewer 会先同步 coord，读取 executor 最新记录，然后开始 review。
+
+### 4. B 做完后回到 A
+
+reviewer 完成后会记录 review 结果。然后在 executor 会话里说：
+
+```text
+reviewer 已完成
+```
+
+executor 会同步 reviewer 的结论，继续修改、验证，或说明无需处理。
+
+### 5. 两个执行角色互相协作
+
+frontend 会话：
+
+```text
+$coord join checkout-flow frontend
+```
+
+backend 会话：
+
+```text
 $coord join checkout-flow backend
 ```
 
-如果 group 不存在，`join` 会自动创建 group 并加入当前 agent，不再单独询问。
-
-如果 agent 名是 `reviewer`、`executor`、`frontend` 或 `backend`，`join` 会输出当前角色指令。用户不同意时，可以直接补充职责；agent 应先判断是否和安全边界或 group 决策冲突，确认后再记录为自定义角色卡。
-
-同步状态：
+如果 frontend 需要 backend 确认接口：
 
 ```text
-$coord sync
+$coord ask @backend 登录接口错误码按哪套返回？
 ```
 
-提问：
+然后去 backend 会话说：
 
 ```text
-$coord ask @backend 接口错误码最终按哪套处理
+frontend 已提问
 ```
 
-回答：
+backend 同步后回答：
 
 ```text
-$coord answer q-0001 按 ApiErrorCode 统一处理
+$coord answer q-0001 按 ApiErrorCode 统一返回
 ```
 
-结束前交接：
+再回到 frontend 会话说：
 
 ```text
-$coord handoff
+backend 已回复
 ```
 
-## 命令总览
+### 6. 中途加入一个新会话
 
-`$coord` 支持两种写法：
-
-```text
-$coord join group-a frontend
-$coord-join group-a frontend
-```
-
-两者等价。`$coord-xxx` 形式是为了方便联想和减少输入错误。
-
-| 独立命令 | 等价写法 | 用途 |
-| --- | --- | --- |
-| `$coord-init <group>` | `$coord init <group>` | 创建 group |
-| `$coord-join <group> <agent>` | `$coord join <group> <agent>` | 加入 group |
-| `$coord-archive <group>` | `$coord archive <group>` | 归档 group |
-| `$coord-archive-all` | `$coord archive-all` | 归档所有 active group |
-| `$coord-sync` | `$coord sync` | 同步当前 group |
-| `$coord-brief [group]` | `$coord brief` | 查看 group 简报 |
-| `$coord-status [group]` | `$coord status` | 查看紧凑状态 |
-| `$coord-list-groups` | `$coord list groups` | 列出 active group |
-| `$coord-list-agents [group]` | `$coord list agents` | 列出 group 成员 |
-| `$coord-note <内容>` | `$coord note <内容>` | 记录进展或 review 结果 |
-| `$coord-retract <event-id> <reason>` | `$coord retract <event-id> <reason>` | 撤回未被消费的错误记录 |
-| `$coord-correct <event-id> <final text>` | `$coord correct <event-id> <final text>` | 用最终正确版本替换旧记录 |
-| `$coord-impact <event-id> @agent <action needed>` | `$coord impact <event-id> @agent <action needed>` | 标记已影响执行链路的错误 |
-| `$coord-resolve-impact <impact-id> <result>` | `$coord resolve-impact <impact-id> <result>` | 关闭已处理的影响项 |
-| `$coord-ask @agent <问题>` | `$coord ask @agent <问题>` | 向 agent 提问 |
-| `$coord-answer <q-id> <回答>` | `$coord answer <q-id> <回答>` | 回答问题 |
-| `$coord-decision <内容>` | `$coord decision <内容>` | 记录决策 |
-| `$coord-claim <任务> --files "path/**"` | `$coord claim <任务> --files "path/**"` | 认领任务或文件范围 |
-| `$coord-release <claim-id>` | `$coord release <claim-id>` | 释放认领 |
-| `$coord-handoff` | `$coord handoff` | 交接当前进展 |
-
-## 常用命令
-
-列出已创建且未归档的 active group：
+新会话加入后先看简报：
 
 ```text
-$coord list groups
-$coord-list-groups
-```
-
-创建 group：
-
-```text
-$coord init <group>
-$coord-init <group>
-```
-
-加入 group：
-
-```text
-$coord join <group> <agent>
-$coord-join <group> <agent>
-```
-
-查看 group 成员：
-
-```text
-$coord list agents
-$coord-list-agents
-```
-
-同步状态：
-
-```text
-$coord sync
-$coord-sync
-```
-
-查看中途加入所需的简报：
-
-```text
+$coord join checkout-flow reviewer
 $coord brief
-$coord-brief
 ```
 
-查看紧凑计数状态：
+`brief` 会输出当前 group 的成员、开放问题、活跃认领、待处理影响项和有效摘要。
+
+## 高阶用法
+
+日常只需要记住 `join`、`A 已完成`、`B 已完成`。下面这些命令在需要更精确协作时再用。
+
+独立入口只保留常用查看和生命周期命令：`$coord-join`、`$coord-sync`、`$coord-brief`、`$coord-status`、`$coord-list-groups`、`$coord-list-agents`、`$coord-archive`、`$coord-archive-all`。其他高阶命令统一使用 `$coord <subcommand>`。
+
+### 状态查看
 
 ```text
+$coord sync
+$coord brief
 $coord status
-$coord-status
+$coord list groups
+$coord list agents
 ```
 
-记录进展：
+- `sync`：当前会话开始工作前同步状态。
+- `brief`：中途加入时查看 group 简报。
+- `status`：看紧凑计数。
+- `list groups` / `list agents`：查看已有 group 和成员。
+
+### 记录结果
 
 ```text
-$coord note <内容>
-$coord-note <内容>
-```
-
-已加入 group 后，即使用户没有再次输入 `$coord`，review、分析、实现、验证、排查、规划这类任务完成前也应该写一条 `note`，除非用户明确说不要记录。
-
-记录是共享状态，不是聊天记录。写入 `note`、`decision`、`answer` 或 `handoff` 前，应只提炼最终有效结论、当前状态和仍有效风险；不要记录推理过程、协商过程、草稿、候选方案、被推翻的 review 结论或“修订审查结论”这类中间态。如果用户在 join 后要求记录“刚才”“前面”“当前会话”的 review 结果、结论或约定，agent 必须回看当前会话中 join 前后的相关内容，记录最后稳定版本，不能只取最近一条消息。
-
-调整角色卡：
-
-```text
-$coord role <确认后的角色定位>
-```
-
-不要在 `join` 上增加角色参数。角色卡应在 join 后由用户和 agent 沟通提炼；agent 确认没有冲突后再写入。不要使用 `executer`，应使用 `executor`。
-
-提问：
-
-```text
-$coord ask @<agent> <问题>
-$coord ask @all <问题>
-$coord-ask @<agent> <问题>
-$coord-ask @all <问题>
-```
-
-回答：
-
-```text
-$coord answer <question-id> <回答>
-$coord-answer <question-id> <回答>
-```
-
-回答规则：
-
-- 只能由目标 agent 回答。
-- `@all` 问题可以由任意 agent 回答。
-- 已回答的问题默认不能重复回答。
-
-记录决策：
-
-```text
-$coord decision <决策内容>
-$coord-decision <决策内容>
-```
-
-认领任务或文件范围：
-
-```text
-$coord claim <任务说明> --files "<项目相对路径>"
-$coord-claim <任务说明> --files "<项目相对路径>"
-```
-
-`--files` 必须使用项目相对路径。不允许绝对路径，不允许 `..`。模糊 glob 会按保守冲突处理。如果和其他 active claim 重叠，命令会失败，需要先协调。
-
-释放认领：
-
-```text
-$coord release <claim-id>
-$coord-release <claim-id>
-```
-
-交接：
-
-```text
+$coord note "reviewed src/login: no blocking issues found; residual risk is manual E2E not run"
 $coord handoff
-$coord-handoff
+$coord decision "登录接口错误态统一按 ApiErrorCode 映射"
 ```
 
-交接内容应包含已完成工作、当前判断和依据、未完成事项、阻塞点、建议下一步。
+记录时只写最终有效结论、当前状态、阻塞点和仍有效风险。不要写推理过程、草稿、临时判断或已经被推翻的结论。
 
-归档 group：
+### 提问和回答
 
 ```text
-$coord archive <group>
-$coord-archive <group>
+$coord ask @backend "接口错误码最终按哪套处理？"
+$coord ask @all "谁负责 review 登录接口？"
+$coord answer q-0001 "按 ApiErrorCode 统一处理"
 ```
 
-归档所有 active group：
+`ask` 是异步留言。对方只有在 `sync` 后才会看到。
+
+### 认领文件范围
 
 ```text
+$coord claim "登录页 UI 调整" --files "src/login/**"
+$coord release c-0001
+```
+
+`--files` 使用项目相对路径；不要用绝对路径或 `..`。如果和其他 active claim 重叠，命令会失败，需要先协调。
+
+### 纠错
+
+普通 `sync` 和 `brief` 默认只显示当前有效视图。
+
+```text
+$coord retract e-0003 "记录有误，未被消费"
+$coord correct e-0003 "最终正确结论"
+```
+
+- `retract`：撤回未被消费、无需其他 agent 知道过程的错误记录。
+- `correct`：用最终正确版本替换旧记录。
+
+如果旧记录已经被执行或可能影响别人，不要静默撤回，改用 impact：
+
+```text
+$coord impact e-0003 @executor "旧结论已被执行，请重新检查相关改动"
+$coord resolve-impact i-0001 "已重查，无需改动"
+```
+
+### 归档
+
+```text
+$coord archive checkout-flow
 $coord archive-all
-$coord-archive-all
 ```
 
 归档是移动，不是删除：
@@ -327,171 +250,31 @@ $coord-archive-all
 
 归档后，`$coord list groups` 不再显示该 group。
 
-## 语义触发
-
-可以不用严格输入命令，agent 应能理解这些说法：
+### 调整角色卡
 
 ```text
-加入 checkout-flow，身份 frontend
-同步一下
-看一下协调状态
-问后端接口错误码怎么处理
-回答 q-0001 按 ApiErrorCode 统一处理
-记录一个决策：错误态按 ApiErrorCode 映射
-认领登录页 UI，文件 src/login/**
-交接一下当前进展
-归档 checkout-flow
-归档所有协作组
-把刚才的 review 结果记录下来
-角色改成只审查 spec/plan，不审查代码
-executor 已完成
-reviewer 已回复
+$coord role "只审查 spec/plan，不审查代码；发现需求歧义时先提问。"
 ```
 
-语义不明确时，agent 应先问一个澄清问题，不应该猜。
+只有当 join 后的角色定位不符合当前任务时才需要调整。
 
-## 场景示例
+### 直接运行 helper
 
-两个会话协作，一个做前端，一个做后端：
-
-```text
-$coord init checkout-flow
-$coord join checkout-flow frontend
-$coord claim "登录页 UI 调整" --files "src/login/**"
-$coord ask @backend 接口错误码最终按哪套处理
-```
-
-另一个会话：
-
-```text
-$coord join checkout-flow backend
-$coord sync
-$coord answer q-0001 按 ApiErrorCode 统一处理
-$coord decision 登录接口错误态统一按 ApiErrorCode 映射
-```
-
-中途加入 reviewer：
-
-```text
-$coord join checkout-flow reviewer
-$coord brief
-$coord claim "review 登录接口 contract 和测试" --files "src/api/login.ts,test/login/**"
-$coord note "reviewed login contract and tests: no blocking issues found; residual risk is manual end-to-end usage not exercised"
-```
-
-reviewer / executor 往复：
-
-```text
-$coord join checkout-flow executor
-# executor 写 spec/plan 或代码后记录 note/handoff
-
-$coord join checkout-flow reviewer
-executor 已完成
-# reviewer sync 后审查 executor 最新结果，并记录 review note
-
-# 回到 executor 会话
-reviewer 已完成
-# executor sync 后读取 reviewer 最新结论，继续修改或报告无须处理
-```
-
-claim 冲突时先沟通：
-
-```text
-$coord ask @frontend 我需要改 src/login/form.ts 接口调用，能否释放或拆分 claim？
-```
-
-纠错但不污染普通视图：
-
-```text
-$coord correct e-0011 "最终正确结论"
-```
-
-如果旧记录已经被执行：
-
-```text
-$coord impact e-0011 @executor "旧结论已被执行，请重新检查相关改动"
-$coord resolve-impact i-0001 "已重查，无需改动"
-```
-
-## 人应该做什么
-
-- 给每个会话指定 group 和 agent。
-- 常用身份优先使用 `reviewer`、`executor`、`frontend`、`backend`；不要使用 `executer`。
-- 在关键节点触发 `sync`、`ask`、`handoff`。
-- 如果 join 后的角色定位不符合当前任务，直接说明要调整的职责。
-- 对分工不清或 claim 冲突做裁决。
-- 不手动编辑 coord 数据目录里的 JSON/JSONL 文件。
-- 不把密钥、token、隐私信息写入 `$coord`。
-
-## Agent 应该做什么
-
-- 解析 `$coord` 和明确的自然语言触发。
-- 通过 helper 脚本读写协调数据。
-- 已加入 group 后，开始 review、分析、实现、验证、排查、规划前先 `sync`。
-- 遵守 join/sync 输出的当前角色卡；用户调整职责后，确认无冲突再用 `role` 记录。
-- 跨 agent 依赖用 `ask`，不要猜。
-- 听到“xxx 已完成”或“xxx 已回复”时先 `sync`，找到相关记录后再按当前角色继续；找不到记录时不要编造。
-- 阶段性完成后写 `note` 或 `handoff`。
-- review 或分析任务完成后，先写 `note` 记录结果，再回复用户；没有发现问题也要记录。
-- 回答问题必须用 `answer q-id`。
-- 发现 claim 冲突时停下来说明。
-- 不把 `$coord` 当作修改项目文件、git、进程或外部系统的授权。
-
-## 常见问题
-
-### `$coord list groups` 看不到某个 group
-
-可能原因：
-
-- group 从未创建。
-- group 已被 archive。
-- group 目录残缺，没有 `manifest.json`。
-
-### `$coord join` 创建了一个新 group
-
-这是当前默认行为。`join` 的 group 名如果不存在，会直接创建并加入。发现名字拼错时，可以归档拼错的 group 后重新加入正确 group。
-
-### 问题发出后对方没有反应
-
-`$coord` 不会实时通知。对方会话需要执行：
-
-```text
-$coord sync
-```
-
-才能看到问题。
-
-### answer 被拒绝
-
-可能原因：
-
-- 当前 agent 不是问题目标。
-- 问题已经被回答过。
-- question id 写错。
-
-### claim 被拒绝
-
-可能原因：
-
-- 路径和其他 active claim 重叠。
-- 使用了绝对路径。
-- 使用了 `..`。
-- glob 过于模糊，被保守判定为冲突。
-
-## 直接运行 helper
-
-一般情况下不需要直接运行底层脚本。调试时可以在仓库根目录执行：
+一般不需要直接运行底层脚本。调试时可以在仓库根目录执行：
 
 ```bash
 python3 skills/coord/scripts/coord.py list groups
 ```
 
-## 开发与验证
-
-运行单元测试：
+隔离测试可指定数据目录：
 
 ```bash
-python3 skills/coord/scripts/test_coord.py
+COORD_ROOT=/tmp/coord-test python3 skills/coord/scripts/coord.py list groups
 ```
 
-测试会使用临时目录，不会写入默认协调数据目录。
+### 开发验证
+
+```bash
+python3 -m unittest skills.coord.scripts.test_coord -v
+python3 -m unittest test_install -v
+```

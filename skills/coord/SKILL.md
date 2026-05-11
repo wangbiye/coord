@@ -109,7 +109,6 @@ The following standalone commands are equivalent to `$coord <subcommand>` forms 
 
 | Standalone | Equivalent |
 | --- | --- |
-| `$coord-init <group>` | `$coord init <group>` |
 | `$coord-join <group> <agent>` | `$coord join <group> <agent>` |
 | `$coord-archive <group>` | `$coord archive <group>` |
 | `$coord-archive-all` | `$coord archive-all` |
@@ -118,19 +117,8 @@ The following standalone commands are equivalent to `$coord <subcommand>` forms 
 | `$coord-status [group]` | `$coord status` |
 | `$coord-list-groups` | `$coord list groups` |
 | `$coord-list-agents [group]` | `$coord list agents` |
-| `$coord-note <text>` | `$coord note <text>` |
-| `$coord-retract <event-id> <reason>` | `$coord retract <event-id> <reason>` |
-| `$coord-correct <event-id> <final text>` | `$coord correct <event-id> <final text>` |
-| `$coord-impact <event-id> @agent <action needed>` | `$coord impact <event-id> @agent <action needed>` |
-| `$coord-resolve-impact <impact-id> <result>` | `$coord resolve-impact <impact-id> <result>` |
-| `$coord-ask @agent <text>` | `$coord ask @agent <text>` |
-| `$coord-answer <q-id> <text>` | `$coord answer <q-id> <text>` |
-| `$coord-decision <text>` | `$coord decision <text>` |
-| `$coord-claim <task> --files "path/**"` | `$coord claim <task> --files "path/**"` |
-| `$coord-release <claim-id>` | `$coord release <claim-id>` |
-| `$coord-handoff` | `$coord handoff` |
 
-All standalone command skills must still follow this main coord protocol and safety boundary.
+Other commands remain available through `$coord <subcommand>` but do not have standalone command skills.
 
 ## Record Final State
 
