@@ -286,6 +286,62 @@ class CoordCliTest(unittest.TestCase):
             )
         )
 
+    def test_correct_replaces_note_in_sync_brief_and_agent_summaries(self):
+        self.run_cli("init", "group-a")
+        self.run_cli("join", "group-a", "reviewer")
+        self.run_cli("note", "--group", "group-a", "--agent", "reviewer", "旧结论")
+        note_event = next(
+            event
+            for event in self.read_jsonl("groups/group-a/events.jsonl")
+            if event.get("type") == "note"
+        )
+
+        correct = self.run_cli(
+            "correct",
+            "--group",
+            "group-a",
+            "--agent",
+            "reviewer",
+            note_event["id"],
+            "最终结论",
+        )
+
+        self.assertIn(f"corrected {note_event['id']}", correct.stdout)
+        sync = self.run_cli("sync", "--group", "group-a", "--agent", "reviewer")
+        brief = self.run_cli("brief", "--group", "group-a")
+        self.assertNotIn("旧结论", sync.stdout)
+        self.assertNotIn("旧结论", brief.stdout)
+        self.assertIn("最终结论", sync.stdout)
+        self.assertIn("最终结论", brief.stdout)
+
+    def test_correct_replaces_answer_in_recent_answers(self):
+        self.run_cli("init", "group-a")
+        self.run_cli("join", "group-a", "frontend")
+        self.run_cli("join", "group-a", "backend")
+        self.run_cli("ask", "--group", "group-a", "--agent", "frontend", "@backend", "接口怎么处理")
+        self.run_cli("answer", "--group", "group-a", "--agent", "backend", "q-0001", "旧回答")
+        answer_event = next(
+            event
+            for event in self.read_jsonl("groups/group-a/events.jsonl")
+            if event.get("type") == "answer"
+        )
+
+        self.run_cli(
+            "correct",
+            "--group",
+            "group-a",
+            "--agent",
+            "backend",
+            answer_event["id"],
+            "最终回答",
+        )
+
+        sync = self.run_cli("sync", "--group", "group-a", "--agent", "frontend")
+        self.assertIn("q-0001 from frontend to @backend", sync.stdout)
+        self.assertNotIn("旧回答", sync.stdout)
+        self.assertIn("answer by backend", sync.stdout)
+        self.assertIn("最终回答", sync.stdout)
+
     def test_archive_moves_group_out_of_active_groups_and_preserves_files(self):
         self.run_cli("init", "group-a")
         self.run_cli("join", "group-a", "frontend")

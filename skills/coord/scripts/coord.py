@@ -294,14 +294,24 @@ def append_event(root, group, event_type, agent, **fields):
     return record
 
 
+def append_agent_markdown_entry(root, group, agent, kind, event_id, text):
+    append_text(root, agent_file(root, group, agent), f"\n## {kind} {event_id} {now_iso()}\n\n{text}\n")
+
+
 def load_manifest(paths):
     return read_json(paths["manifest"], {"group": paths["base"].name, "agents": {}})
 
 
 def current_questions(paths, event_state=None):
+    hidden_event_ids = set()
+    if event_state:
+        hidden_event_ids = set(event_state.get("hidden_event_ids", set()))
     states = {}
     order = []
     for record in read_jsonl(paths["questions"]):
+        event_id = record.get("event_id")
+        if event_id and event_id in hidden_event_ids:
+            continue
         qid = record.get("id")
         if not qid:
             continue
@@ -318,7 +328,7 @@ def current_questions(paths, event_state=None):
             }
         else:
             states[qid] = {**prior, **record}
-    return [states[qid] for qid in order]
+    return [states[qid] for qid in order if states[qid].get("text") and states[qid].get("to")]
 
 
 def active_claims(paths):
@@ -629,8 +639,8 @@ def cmd_note(args):
     with locked(root, args.group):
         require_group(root, args.group)
         text = " ".join(args.text).strip()
-        append_event(root, args.group, "note", args.agent, text=text)
-        append_text(root, agent_file(root, args.group, args.agent), f"\n## Note {now_iso()}\n\n{text}\n")
+        event = append_event(root, args.group, "note", args.agent, text=text)
+        append_agent_markdown_entry(root, args.group, args.agent, "Note", event["id"], text)
         print(f"noted for {args.group}/{args.agent}")
 
 
@@ -686,6 +696,61 @@ def cmd_retract(args):
         print(f"retracted {args.event_id}")
 
 
+def append_replacement(root, group, agent, target, text):
+    event_type = target.get("type")
+    if event_type == "note":
+        event = append_event(root, group, "note", agent, text=text, replaces_event_id=target["id"])
+        append_agent_markdown_entry(root, group, agent, "Note", event["id"], text)
+        return event
+    if event_type == "handoff":
+        event = append_event(root, group, "handoff", agent, summary=text, replaces_event_id=target["id"])
+        append_agent_markdown_entry(root, group, agent, "Handoff", event["id"], text)
+        return event
+    if event_type == "decision":
+        event = append_event(root, group, "decision", agent, text=text, replaces_event_id=target["id"])
+        append_text(root, group_paths(root, group)["decisions"], f"- {now_iso()} @{agent}: {text} (replaces {target['id']})\n")
+        return event
+    if event_type == "question":
+        question_id = target.get("question_id")
+        route = target.get("target", "all")
+        event = append_event(root, group, "question", agent, target=route, question_id=question_id, text=text, replaces_event_id=target["id"])
+        append_jsonl(root, group_paths(root, group)["questions"], {
+            "id": question_id,
+            "from": target.get("agent", agent),
+            "to": route,
+            "text": text,
+            "event_id": event["id"],
+        })
+        return event
+    if event_type == "answer":
+        question_id = target.get("question_id")
+        event = append_event(root, group, "answer", agent, question_id=question_id, answer=text, replaces_event_id=target["id"])
+        append_jsonl(root, group_paths(root, group)["questions"], {
+            "id": question_id,
+            "from": agent,
+            "status": "answered",
+            "answered_at": now_iso(),
+            "answer": text,
+            "event_id": event["id"],
+        })
+        return event
+    raise CoordError(f"event cannot be corrected: {target['id']}")
+
+
+def cmd_correct(args):
+    root = root_dir()
+    validate_event_id(args.event_id)
+    with locked(root, args.group):
+        paths = require_group(root, args.group)
+        events = read_jsonl(paths["events"])
+        target = event_by_id(events, args.event_id)
+        if target.get("type") not in CORRECTABLE_EVENT_TYPES:
+            raise CoordError(f"event cannot be corrected: {args.event_id}")
+        text = " ".join(args.text).strip()
+        replacement = append_replacement(root, args.group, args.agent, target, text)
+        print(f"corrected {args.event_id} with {replacement['id']}")
+
+
 def cmd_ask(args):
     root = root_dir()
     target = args.target[1:] if args.target.startswith("@") else args.target
@@ -695,6 +760,7 @@ def cmd_ask(args):
         paths = require_group(root, args.group)
         qid = next_id(current_questions(paths), "q")
         text = " ".join(args.text).strip()
+        question_event = append_event(root, args.group, "question", args.agent, target=target, question_id=qid, text=text)
         question = {
             "id": qid,
             "from": args.agent,
@@ -702,9 +768,9 @@ def cmd_ask(args):
             "status": "open",
             "created_at": now_iso(),
             "text": text,
+            "event_id": question_event["id"],
         }
         append_jsonl(root, paths["questions"], question)
-        append_event(root, args.group, "question", args.agent, target=target, question_id=qid, text=text)
         print(f"created {qid} to @{target}")
 
 
@@ -724,15 +790,16 @@ def cmd_answer(args):
         if target not in {"all", args.agent}:
             raise CoordError(f"question {args.question_id} is targeted to @{target}; @{args.agent} cannot answer")
         answer = " ".join(args.text).strip()
+        answer_event = append_event(root, args.group, "answer", args.agent, question_id=args.question_id, answer=answer)
         record = {
             "id": args.question_id,
             "from": args.agent,
             "status": "answered",
             "answered_at": now_iso(),
             "answer": answer,
+            "event_id": answer_event["id"],
         }
         append_jsonl(root, paths["questions"], record)
-        append_event(root, args.group, "answer", args.agent, question_id=args.question_id, answer=answer)
         print(f"answered {args.question_id}")
 
 
@@ -798,8 +865,8 @@ def cmd_handoff(args):
     with locked(root, args.group):
         require_group(root, args.group)
         summary = " ".join(args.summary).strip()
-        append_event(root, args.group, "handoff", args.agent, summary=summary)
-        append_text(root, agent_file(root, args.group, args.agent), f"\n## Handoff {now_iso()}\n\n{summary}\n")
+        event = append_event(root, args.group, "handoff", args.agent, summary=summary)
+        append_agent_markdown_entry(root, args.group, args.agent, "Handoff", event["id"], summary)
         print(f"recorded handoff for {args.group}/{args.agent}")
 
 
@@ -977,6 +1044,12 @@ def build_parser():
     retract.add_argument("event_id")
     retract.add_argument("reason", nargs="+")
     retract.set_defaults(func=cmd_retract)
+
+    correct = subparsers.add_parser("correct")
+    add_context_args(correct)
+    correct.add_argument("event_id")
+    correct.add_argument("text", nargs="+")
+    correct.set_defaults(func=cmd_correct)
 
     ask = subparsers.add_parser("ask")
     add_context_args(ask)
