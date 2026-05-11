@@ -90,6 +90,10 @@ User-facing commands map to helper commands:
 | `$coord list agents` | `python3 <coord-skill-dir>/scripts/coord.py list agents --group group-a` |
 | `$coord note "text"` | `python3 <coord-skill-dir>/scripts/coord.py note --group group-a --agent frontend "text"` |
 | `$coord role "text"` | `python3 <coord-skill-dir>/scripts/coord.py role --group group-a --agent frontend "text"` |
+| `$coord retract e-0003 "reason"` | `python3 <coord-skill-dir>/scripts/coord.py retract --group group-a --agent frontend e-0003 "reason"` |
+| `$coord correct e-0003 "final text"` | `python3 <coord-skill-dir>/scripts/coord.py correct --group group-a --agent frontend e-0003 "final text"` |
+| `$coord impact e-0003 @backend "action needed"` | `python3 <coord-skill-dir>/scripts/coord.py impact --group group-a --agent frontend e-0003 @backend "action needed"` |
+| `$coord resolve-impact i-0001 "result"` | `python3 <coord-skill-dir>/scripts/coord.py resolve-impact --group group-a --agent frontend i-0001 "result"` |
 | `$coord ask @backend "text"` | `python3 <coord-skill-dir>/scripts/coord.py ask --group group-a --agent frontend @backend "text"` |
 | `$coord answer q-0001 "text"` | `python3 <coord-skill-dir>/scripts/coord.py answer --group group-a --agent frontend q-0001 "text"` |
 | `$coord decision "text"` | `python3 <coord-skill-dir>/scripts/coord.py decision --group group-a --agent frontend "text"` |
@@ -115,6 +119,10 @@ The following standalone commands are equivalent to `$coord <subcommand>` forms 
 | `$coord-list-groups` | `$coord list groups` |
 | `$coord-list-agents [group]` | `$coord list agents` |
 | `$coord-note <text>` | `$coord note <text>` |
+| `$coord-retract <event-id> <reason>` | `$coord retract <event-id> <reason>` |
+| `$coord-correct <event-id> <final text>` | `$coord correct <event-id> <final text>` |
+| `$coord-impact <event-id> @agent <action needed>` | `$coord impact <event-id> @agent <action needed>` |
+| `$coord-resolve-impact <impact-id> <result>` | `$coord resolve-impact <impact-id> <result>` |
 | `$coord-ask @agent <text>` | `$coord ask @agent <text>` |
 | `$coord-answer <q-id> <text>` | `$coord answer <q-id> <text>` |
 | `$coord-decision <text>` | `$coord decision <text>` |
@@ -147,6 +155,16 @@ Review record shape:
 ```text
 reviewed <target>: verdict=<final verdict>; issues=<currently valid issues>; agreed_changes=<stable agreed changes>; residual_risk=<currently valid risk>
 ```
+
+## Corrections And Effective View
+
+Use `retract` only when an incorrect event has not been consumed and the correction process does not need to be visible to other agents.
+
+Use `correct` when an event should be replaced by a final effective version. Normal `sync` and `brief` output hide the superseded event and show the replacement.
+
+Use `impact` when the incorrect event has already been executed, referenced, or may have affected another agent. Do not silently retract these cases. `sync` and `brief` show open impacts under `Needs Attention`.
+
+Use `resolve-impact` after the target agent has handled the impact. If consumption is unclear, ask one concise question; if still unclear, prefer `impact`.
 
 ## Record Results
 

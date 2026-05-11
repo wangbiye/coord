@@ -169,6 +169,10 @@ $coord-join group-a frontend
 | `$coord-list-groups` | `$coord list groups` | 列出 active group |
 | `$coord-list-agents [group]` | `$coord list agents` | 列出 group 成员 |
 | `$coord-note <内容>` | `$coord note <内容>` | 记录进展或 review 结果 |
+| `$coord-retract <event-id> <reason>` | `$coord retract <event-id> <reason>` | 撤回未被消费的错误记录 |
+| `$coord-correct <event-id> <final text>` | `$coord correct <event-id> <final text>` | 用最终正确版本替换旧记录 |
+| `$coord-impact <event-id> @agent <action needed>` | `$coord impact <event-id> @agent <action needed>` | 标记已影响执行链路的错误 |
+| `$coord-resolve-impact <impact-id> <result>` | `$coord resolve-impact <impact-id> <result>` | 关闭已处理的影响项 |
 | `$coord-ask @agent <问题>` | `$coord ask @agent <问题>` | 向 agent 提问 |
 | `$coord-answer <q-id> <回答>` | `$coord answer <q-id> <回答>` | 回答问题 |
 | `$coord-decision <内容>` | `$coord decision <内容>` | 记录决策 |
@@ -394,6 +398,19 @@ claim 冲突时先沟通：
 
 ```text
 $coord ask @frontend 我需要改 src/login/form.ts 接口调用，能否释放或拆分 claim？
+```
+
+纠错但不污染普通视图：
+
+```text
+$coord correct e-0011 "最终正确结论"
+```
+
+如果旧记录已经被执行：
+
+```text
+$coord impact e-0011 @executor "旧结论已被执行，请重新检查相关改动"
+$coord resolve-impact i-0001 "已重查，无需改动"
 ```
 
 ## 人应该做什么
