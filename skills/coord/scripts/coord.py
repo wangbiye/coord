@@ -452,9 +452,31 @@ def read_agent_summaries(paths):
 
 
 def builtin_role_for_agent(agent):
-    if agent == "executer":
+    if agent == "executer" or agent.startswith("executer-") or agent.startswith("executer_"):
         raise CoordError("unsupported agent name: executer; use executor")
-    return agent if agent in BUILTIN_ROLE_PROFILES else None
+    if agent in BUILTIN_ROLE_PROFILES:
+        return agent
+    for role in BUILTIN_ROLE_PROFILES:
+        if agent.startswith(f"{role}-") and len(agent) > len(role) + 1:
+            return role
+        if agent.startswith(f"{role}_") and len(agent) > len(role) + 1:
+            return role
+    return None
+
+
+def print_existing_agent_warning(group, agent, role):
+    print(f"warning: agent {agent} already exists in group {group}.")
+    print("建议为新会话改用唯一 agent 名；只有明确要恢复同一会话身份时才复用当前名称。")
+    if role:
+        print(
+            f"{role}-* 自动继承 {role} 内置角色；{role}_* 也支持，"
+            f"连接符支持中划线和下划线，例如 {role}-2 或 {role}_2。"
+        )
+        return
+    print(
+        "reviewer-* / reviewer_*、executor-* / executor_*、frontend-* / frontend_*、"
+        "backend-* / backend_* 自动继承对应内置角色；连接符支持中划线和下划线。"
+    )
 
 
 def role_data_for_join(agent, existing, timestamp):
@@ -595,7 +617,7 @@ def archive_group(root, group):
 
 def cmd_join(args):
     root = root_dir()
-    builtin_role_for_agent(args.agent)
+    role = builtin_role_for_agent(args.agent)
     validate_name("agent", args.agent)
     with locked(root, args.group):
         paths = group_paths(root, args.group)
@@ -605,6 +627,8 @@ def cmd_join(args):
         manifest = load_manifest(paths)
         manifest.setdefault("agents", {})
         existing = manifest["agents"].get(args.agent)
+        if existing:
+            print_existing_agent_warning(args.group, args.agent, role)
         timestamp = now_iso()
         role_data = role_data_for_join(args.agent, existing, timestamp)
         manifest["agents"][args.agent] = {

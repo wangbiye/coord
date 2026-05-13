@@ -32,11 +32,13 @@ The helper script is stateless between invocations. For commands that require id
 
 If identity is missing, only run `init`, `join`, `list groups`, or `brief --group <group>`. Otherwise ask the user which group and agent this session should use.
 
-Do not reuse the same agent name for two live sessions unless the user explicitly chooses that.
+Do not reuse the same agent name for two live sessions unless the user explicitly chooses that. If `join` warns that the same agent already exists, suggest a unique name for the new session.
 
 ## Role Profiles
 
 `agent` identifies the current session. `role` describes how that session should work. Users do not need to manage this distinction: `join group-a reviewer` should both set `agent=reviewer` and, because `reviewer` is a built-in role, attach the reviewer role profile.
+
+Built-in roles are inherited by exact names and by suffixed session names. `reviewer-*` / `reviewer_*`, `executor-*` / `executor_*`, `frontend-*` / `frontend_*`, and `backend-*` / `backend_*` automatically inherit the matching built-in role profile. Use this for extra live sessions, such as `executor-2` or `executor_hotfix`, instead of reusing `executor`.
 
 Built-in role names:
 

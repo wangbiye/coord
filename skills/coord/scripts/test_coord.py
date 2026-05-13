@@ -114,6 +114,43 @@ class CoordCliTest(unittest.TestCase):
         self.assertIn("## Role Profile", summary)
         self.assertIn("Role: reviewer", summary)
 
+    def test_join_prefixed_builtin_role_records_matching_profile(self):
+        self.run_cli("init", "group-a")
+
+        cases = [
+            ("reviewer-2", "reviewer", "reviews spec, plan, code, tests, and delivery results"),
+            ("executor_2", "executor", "executes changes from confirmed specs"),
+            ("frontend-ui", "frontend", "Executes frontend work with focus on UI"),
+            ("backend_api", "backend", "Executes backend work with focus on API contracts"),
+        ]
+        for agent, role, profile_text in cases:
+            with self.subTest(agent=agent):
+                join = self.run_cli("join", "group-a", agent)
+                self.assertIn(f"matched built-in role: {role}", join.stdout)
+                self.assertIn(profile_text, join.stdout)
+
+        manifest = self.read_json("groups/group-a/manifest.json")
+        for agent, role, profile_text in cases:
+            with self.subTest(manifest_agent=agent):
+                data = manifest["agents"][agent]
+                self.assertEqual(role, data["role"])
+                self.assertEqual("builtin", data["role_source"])
+                self.assertIn(profile_text, data["role_profile"])
+                summary = (self.root / f"groups/group-a/agents/{agent}.md").read_text()
+                self.assertIn(f"Agent: {agent}", summary)
+                self.assertIn(f"Role: {role}", summary)
+
+    def test_join_existing_agent_suggests_unique_inheriting_name(self):
+        self.run_cli("init", "group-a")
+        self.run_cli("join", "group-a", "executor")
+
+        join = self.run_cli("join", "group-a", "executor")
+
+        self.assertIn("agent executor already exists in group group-a", join.stdout)
+        self.assertIn("建议为新会话改用唯一 agent 名", join.stdout)
+        self.assertIn("executor-* 自动继承 executor 内置角色", join.stdout)
+        self.assertIn("executor_2", join.stdout)
+
     def test_join_rejects_executer_and_points_to_executor(self):
         self.run_cli("init", "group-a")
 

@@ -23,7 +23,11 @@ python3 <coord-skill-dir>/scripts/coord.py join <group> <agent>
 
 成功加入后，记住当前会话身份：`group=<group>` 和 `agent=<agent>`。
 
-如果 agent 名是 `reviewer`、`executor`、`frontend` 或 `backend`，helper 会输出匹配到的内置角色卡。向用户简要说明当前角色指令，并提醒用户如果不符合当前任务可以调整。不要使用 `executer`；用户写错时提示改用 `executor`。
+如果 agent 名是 `reviewer`、`executor`、`frontend` 或 `backend`，helper 会输出匹配到的内置角色卡。带后缀的新会话名也会自动继承内置角色：`reviewer-*` / `reviewer_*`、`executor-*` / `executor_*`、`frontend-*` / `frontend_*`、`backend-*` / `backend_*`。连接符支持中划线和下划线，例如 `executor-2`、`executor_hotfix`。
+
+如果 helper 提示同名 agent 已存在，建议用户为新会话改用唯一名称，并告知用户类似 `executor-* 自动继承 executor 内置角色` 的规则；只有用户明确要恢复同一会话身份时才继续复用同名 agent。
+
+向用户简要说明当前角色指令，并提醒用户如果不符合当前任务可以调整。不要使用 `executer`；用户写错时提示改用 `executor`。
 
 如果用户调整角色定位，先判断是否与 coord 安全边界、当前任务或稳定 group 决策冲突。确认无冲突后，使用主协议中的 `role` 命令记录自定义角色卡。
 

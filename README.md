@@ -84,6 +84,15 @@ $coord join checkout-flow reviewer
 - `frontend`：前端实现或审查。
 - `backend`：后端实现或审查。
 
+如果需要再开一个同类新会话，不要复用同一个 agent 名。可以使用带后缀的唯一名称：
+
+```text
+$coord join checkout-flow executor-2
+$coord join checkout-flow reviewer_hotfix
+```
+
+`reviewer-*` / `reviewer_*`、`executor-*` / `executor_*`、`frontend-*` / `frontend_*`、`backend-*` / `backend_*` 会自动继承对应内置角色卡。连接符支持中划线和下划线。如果 join 时同名 agent 已存在，helper 会建议改名，并提示 `executor-* 自动继承 executor 内置角色` 这类规则。
+
 不要使用 `executer`，应使用 `executor`。
 
 ### 2. 用户直接指派任务
@@ -159,7 +168,7 @@ backend 已回复
 新会话加入后先看简报：
 
 ```text
-$coord join checkout-flow reviewer
+$coord join checkout-flow executor-2
 $coord brief
 ```
 
