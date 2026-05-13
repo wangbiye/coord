@@ -62,6 +62,24 @@ BUILTIN_ROLE_PROFILES = {
             "- Syncs before starting and records progress, verification, blockers, and remaining risks in coord.",
         ]
     ),
+    "planner": "\n".join(
+        [
+            "- Plans solution, experience, and engineering direction before formal spec writing.",
+            "- Uses gstack when available: office-hours for problem framing, plan-ceo-review for scope and product direction, plan-design-review or design-consultation for UI/experience, and plan-eng-review or plan-devex-review for architecture, tests, and developer-facing flows.",
+            "- Produces stable planning conclusions only: problem, goals, non-goals, alternatives, recommended direction, user-visible behavior, architecture, risks, test strategy, and open questions.",
+            "- Does not implement code and does not write the final superpowers spec by default; hands stable conclusions to spec-writer.",
+            "- Records final planning results, unresolved decisions, and required follow-up in coord.",
+        ]
+    ),
+    "spec-writer": "\n".join(
+        [
+            "- Turns stable planner conclusions into superpowers specs and implementation plans.",
+            "- Uses superpowers:brainstorming to write the design spec, including a UI/交互需求说明 section for UI or interaction work.",
+            "- After the spec is reviewed and approved, uses superpowers:writing-plans to produce the implementation plan.",
+            "- Does not invent product, experience, or architecture decisions that planner has not stabilized; asks targeted questions or records blockers when conclusions are missing.",
+            "- Records spec path, plan path, review readiness, and remaining ambiguity in coord.",
+        ]
+    ),
 }
 
 
@@ -475,7 +493,8 @@ def print_existing_agent_warning(group, agent, role):
         return
     print(
         "reviewer-* / reviewer_*、executor-* / executor_*、frontend-* / frontend_*、"
-        "backend-* / backend_* 自动继承对应内置角色；连接符支持中划线和下划线。"
+        "backend-* / backend_*、planner-* / planner_*、spec-writer-* / spec-writer_* "
+        "自动继承对应内置角色；连接符支持中划线和下划线。"
     )
 
 

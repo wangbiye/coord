@@ -53,6 +53,15 @@ find skills -maxdepth 2 -name SKILL.md | sort
 
 安装脚本会同步安装当前仓库里的 `coord` 和 `coord-*` skills，并清理目标目录里旧的 coord 入口。它不会清理 `lark-*`、`superpowers`、`blueprinter` 或其他非 coord skill。
 
+### 设计规划角色的前置依赖
+
+`planner` 和 `spec-writer` 是 coord 内置角色名，但它们会调用其他 skill 体系：
+
+- `planner`：用于方案设计、体验设计和工程规划，需要当前 agent 环境已安装并能发现 gstack skills。
+- `spec-writer`：用于把稳定规划结论整理成 superpowers spec 和 implementation plan，需要当前 agent 环境已安装并能发现 superpowers skills。
+
+coord 本身不会安装 gstack 或 superpowers。缺少这些依赖时，仍然可以加入 `planner` 或 `spec-writer` 并记录协作状态，但对应角色的设计/写 spec 工作流不能完整执行。
+
 升级也是同一个命令：
 
 ```bash
@@ -83,19 +92,39 @@ $coord join checkout-flow reviewer
 - `reviewer`：审查 spec、计划、代码、测试和交付结果。
 - `frontend`：前端实现或审查。
 - `backend`：后端实现或审查。
+- `planner`：用 gstack 做方案设计、体验设计和工程规划。
+- `spec-writer`：用 superpowers 把稳定规划结论写成 spec 和 implementation plan。
 
 如果需要再开一个同类新会话，不要复用同一个 agent 名。可以使用带后缀的唯一名称：
 
 ```text
 $coord join checkout-flow executor-2
 $coord join checkout-flow reviewer_hotfix
+$coord join checkout-flow planner-design
+$coord join checkout-flow spec-writer_2
 ```
 
-`reviewer-*` / `reviewer_*`、`executor-*` / `executor_*`、`frontend-*` / `frontend_*`、`backend-*` / `backend_*` 会自动继承对应内置角色卡。连接符支持中划线和下划线。如果 join 时同名 agent 已存在，helper 会建议改名，并提示 `executor-* 自动继承 executor 内置角色` 这类规则。
+`reviewer-*` / `reviewer_*`、`executor-*` / `executor_*`、`frontend-*` / `frontend_*`、`backend-*` / `backend_*`、`planner-*` / `planner_*`、`spec-writer-*` / `spec-writer_*` 会自动继承对应内置角色卡。连接符支持中划线和下划线。如果 join 时同名 agent 已存在，helper 会建议改名，并提示 `executor-* 自动继承 executor 内置角色` 这类规则。
 
 不要使用 `executer`，应使用 `executor`。
 
-### 2. 用户直接指派任务
+### 2. 用 planner 和 spec-writer 做方案到 spec
+
+需要先确认当前 agent 环境已安装 gstack 和 superpowers。然后可以开两个规划相关会话：
+
+```text
+$coord join checkout-flow planner
+$coord join checkout-flow spec-writer
+```
+
+推荐流转：
+
+1. `planner` 使用 gstack 梳理方案、体验和工程规划，只记录稳定结论、风险和未决问题。
+2. `spec-writer` 同步 coord，读取 `planner` 的稳定结论，用 superpowers 写正式 spec；涉及 UI/交互时，spec 中必须先写「UI/交互需求说明」。
+3. spec 确认后，`spec-writer` 再用 superpowers 写 implementation plan。
+4. `reviewer` 审查 spec/plan，`executor` 按确认后的计划执行。
+
+### 3. 用户直接指派任务
 
 在 executor 会话里说：
 
@@ -105,7 +134,7 @@ $coord join checkout-flow reviewer_hotfix
 
 executor 做完后会记录 note 或 handoff。
 
-### 3. A 做完后去告诉 B
+### 4. A 做完后去告诉 B
 
 在 reviewer 会话里说：
 
@@ -115,7 +144,7 @@ executor 已完成
 
 reviewer 会先同步 coord，读取 executor 最新记录，然后开始 review。
 
-### 4. B 做完后回到 A
+### 5. B 做完后回到 A
 
 reviewer 完成后会记录 review 结果。然后在 executor 会话里说：
 
@@ -125,7 +154,7 @@ reviewer 已完成
 
 executor 会同步 reviewer 的结论，继续修改、验证，或说明无需处理。
 
-### 5. 两个执行角色互相协作
+### 6. 两个执行角色互相协作
 
 frontend 会话：
 
@@ -163,7 +192,7 @@ $coord answer q-0001 按 ApiErrorCode 统一返回
 backend 已回复
 ```
 
-### 6. 中途加入一个新会话
+### 7. 中途加入一个新会话
 
 新会话加入后先看简报：
 

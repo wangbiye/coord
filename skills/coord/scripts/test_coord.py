@@ -122,6 +122,8 @@ class CoordCliTest(unittest.TestCase):
             ("executor_2", "executor", "executes changes from confirmed specs"),
             ("frontend-ui", "frontend", "Executes frontend work with focus on UI"),
             ("backend_api", "backend", "Executes backend work with focus on API contracts"),
+            ("planner-design", "planner", "Plans solution, experience, and engineering direction"),
+            ("spec-writer_2", "spec-writer", "Turns stable planner conclusions into superpowers specs"),
         ]
         for agent, role, profile_text in cases:
             with self.subTest(agent=agent):

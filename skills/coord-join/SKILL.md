@@ -23,7 +23,9 @@ python3 <coord-skill-dir>/scripts/coord.py join <group> <agent>
 
 成功加入后，记住当前会话身份：`group=<group>` 和 `agent=<agent>`。
 
-如果 agent 名是 `reviewer`、`executor`、`frontend` 或 `backend`，helper 会输出匹配到的内置角色卡。带后缀的新会话名也会自动继承内置角色：`reviewer-*` / `reviewer_*`、`executor-*` / `executor_*`、`frontend-*` / `frontend_*`、`backend-*` / `backend_*`。连接符支持中划线和下划线，例如 `executor-2`、`executor_hotfix`。
+如果 agent 名是 `reviewer`、`executor`、`frontend`、`backend`、`planner` 或 `spec-writer`，helper 会输出匹配到的内置角色卡。带后缀的新会话名也会自动继承内置角色：`reviewer-*` / `reviewer_*`、`executor-*` / `executor_*`、`frontend-*` / `frontend_*`、`backend-*` / `backend_*`、`planner-*` / `planner_*`、`spec-writer-*` / `spec-writer_*`。连接符支持中划线和下划线，例如 `executor-2`、`executor_hotfix`。
+
+`planner` 角色依赖 gstack；`spec-writer` 角色依赖 superpowers。加入角色前不需要由 coord 检查安装状态，但向用户说明：如果当前 agent 环境没有安装并发现对应 skills，这两个角色的设计/写 spec 工作流无法正确执行。
 
 如果 helper 提示同名 agent 已存在，建议用户为新会话改用唯一名称，并告知用户类似 `executor-* 自动继承 executor 内置角色` 的规则；只有用户明确要恢复同一会话身份时才继续复用同名 agent。
 

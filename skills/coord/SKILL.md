@@ -38,7 +38,7 @@ Do not reuse the same agent name for two live sessions unless the user explicitl
 
 `agent` identifies the current session. `role` describes how that session should work. Users do not need to manage this distinction: `join group-a reviewer` should both set `agent=reviewer` and, because `reviewer` is a built-in role, attach the reviewer role profile.
 
-Built-in roles are inherited by exact names and by suffixed session names. `reviewer-*` / `reviewer_*`, `executor-*` / `executor_*`, `frontend-*` / `frontend_*`, and `backend-*` / `backend_*` automatically inherit the matching built-in role profile. Use this for extra live sessions, such as `executor-2` or `executor_hotfix`, instead of reusing `executor`.
+Built-in roles are inherited by exact names and by suffixed session names. `reviewer-*` / `reviewer_*`, `executor-*` / `executor_*`, `frontend-*` / `frontend_*`, `backend-*` / `backend_*`, `planner-*` / `planner_*`, and `spec-writer-*` / `spec-writer_*` automatically inherit the matching built-in role profile. Use this for extra live sessions, such as `executor-2` or `executor_hotfix`, instead of reusing `executor`.
 
 Built-in role names:
 
@@ -46,6 +46,10 @@ Built-in role names:
 - `executor`: executes changes from confirmed specs, plans, user requests, or reviewer feedback. In spec/plan phases, update the document until reviewer feedback is resolved. In code phases, implement, fix, test, and verify. Stop for confirmation when requirements change, plans conflict, cross-agent dependencies appear, or risky operations are needed. Record change summary, verification result, and remaining risk before handing back for review.
 - `frontend`: executes frontend work with focus on UI, interaction flow, state changes, responsive behavior, accessibility, and visual consistency. In spec/plan phases, define user-visible behavior, feedback states, page states, edge cases, and acceptance criteria. In code phases, implement frontend changes and verify real interface behavior where possible.
 - `backend`: executes backend work with focus on API contracts, data models, permissions, error handling, idempotency, compatibility, migrations, and test coverage. In spec/plan phases, define interface boundaries, data flow, failure cases, and validation strategy. In code phases, implement backend changes, tests, and contract verification.
+- `planner`: plans solution, experience, and engineering direction before formal spec writing. Use gstack skills when available: `office-hours`, `plan-ceo-review`, `design-consultation`, `plan-design-review`, `plan-eng-review`, and `plan-devex-review`. Record stable planning conclusions only; do not implement code or write the final superpowers spec by default.
+- `spec-writer`: turns stable `planner` conclusions into superpowers specs and implementation plans. Use `superpowers:brainstorming` for design specs and `superpowers:writing-plans` after spec approval. For UI or interaction work, include a `UI/交互需求说明` section before technical design.
+
+`planner` requires gstack to be installed and discoverable by the current agent environment. `spec-writer` requires superpowers to be installed and discoverable. Coord can still record these roles without those dependencies, but the role workflow cannot be executed correctly until the required skills are available.
 
 Do not use `executer`. If the user types it, tell them to use `executor`.
 
