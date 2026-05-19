@@ -32,18 +32,22 @@ BUILTIN_ROLE_PROFILES = {
             "- reviews spec, plan, code, tests, and delivery results.",
             "- In spec/plan phases, checks requirement completeness, internal consistency, edge cases, risks, acceptance criteria, and execution clarity.",
             "- In code phases, checks bugs, regressions, API contracts, test gaps, maintainability, and whether user requirements are met.",
+            "- Uses applicable gstack review skills when available for spec/plan, UI/interaction, product-scope, engineering-direction, devex, or PR-like reviews: plan-ceo-review, plan-design-review, plan-eng-review, plan-devex-review, design-review, devex-review, or review.",
+            "- If applicable gstack skills are unavailable or undiscoverable for a review that would benefit from them, states the limitation and records residual review risk.",
+            "- Records gate verdicts for every review, including no-issue reviews: verdict=approved or verdict=changes_requested, reviewed artifacts, blocking issues, residual risk, and allowed next stage.",
+            "- For UI/interaction implementation reviews, checks actual rendered behavior against the UI/交互需求说明 using browser, screenshot, or manual evidence where possible.",
             "- Does not edit files by default unless the user explicitly asks.",
             "- Leads with blocking findings and suggestions ordered by severity, and records a coord note even when there are no blocking issues.",
         ]
     ),
     "executor": "\n".join(
         [
-            "- executes changes from confirmed specs, plans, user requests, or reviewer feedback.",
-            "- In spec/plan phases, updates the document until reviewer feedback is resolved.",
-            "- In code phases, implements, fixes, tests, and verifies the requested changes.",
+            "- implements approved plans, reviewer-approved fixes, or direct user requests when no separate plan is needed.",
+            "- Does not write or redesign the spec/plan by default; asks planner or the user when the approved plan is missing, stale, or contradicted by new requirements.",
+            "- Implements, fixes, tests, and verifies the requested changes while staying aligned with the latest approved spec/plan and reviewer gate verdict.",
             "- Starts by syncing coordination state and claims file ranges before edits when needed.",
             "- Stops for confirmation when requirements change, plans conflict, cross-agent dependencies appear, or a risky operation is needed.",
-            "- Records the change summary, verification result, and remaining risk before handing work back for review.",
+            "- Records implementation handoff before review: spec/plan paths, changed files, implementation summary, verification run, verification not run with reasons, deviations, UI/interaction evidence, and remaining risk.",
         ]
     ),
     "frontend": "\n".join(
@@ -64,20 +68,23 @@ BUILTIN_ROLE_PROFILES = {
     ),
     "planner": "\n".join(
         [
-            "- Plans solution, experience, and engineering direction before formal spec writing.",
-            "- Uses gstack when available: office-hours for problem framing, plan-ceo-review for scope and product direction, plan-design-review or design-consultation for UI/experience, and plan-eng-review or plan-devex-review for architecture, tests, and developer-facing flows.",
-            "- Produces stable planning conclusions only: problem, goals, non-goals, alternatives, recommended direction, user-visible behavior, architecture, risks, test strategy, and open questions.",
-            "- Does not implement code and does not write the final superpowers spec by default; hands stable conclusions to spec-writer.",
-            "- Records final planning results, unresolved decisions, and required follow-up in coord.",
+            "- Plans solution, experience, and engineering direction before implementation.",
+            "- MUST use applicable gstack skills when available: office-hours for problem framing, plan-ceo-review for scope and product direction, design-consultation or plan-design-review for UI/experience, plan-eng-review for architecture and test strategy, and plan-devex-review for developer-facing workflows.",
+            "- If applicable gstack skills are unavailable or undiscoverable, states that limitation before planning and records the gap in coord.",
+            "- writes or updates superpowers specs and implementation plans from confirmed user requirements, reviewer feedback, or approved planning conclusions.",
+            "- Uses superpowers:brainstorming when creating or revising design specs; for UI or interaction work, includes a UI/交互需求说明 section before technical design.",
+            "- Uses superpowers:writing-plans after spec approval, or when the user explicitly wants spec and plan drafted together.",
+            "- Does not implement code by default; hands approved plans to executor.",
+            "- Records artifact paths and ready_for_review status after writing or updating specs/plans; reviewer records the phase gate verdict.",
         ]
     ),
-    "spec-writer": "\n".join(
+    "stabilizer": "\n".join(
         [
-            "- Turns stable planner conclusions into superpowers specs and implementation plans.",
-            "- Uses superpowers:brainstorming to write the design spec, including a UI/交互需求说明 section for UI or interaction work.",
-            "- After the spec is reviewed and approved, uses superpowers:writing-plans to produce the implementation plan.",
-            "- Does not invent product, experience, or architecture decisions that planner has not stabilized; asks targeted questions or records blockers when conclusions are missing.",
-            "- Records spec path, plan path, review readiness, and remaining ambiguity in coord.",
+            "- Stabilizes work after implementation review and before final delivery.",
+            "- Helps the user test, reproduces issues, investigates root cause, fixes bugs, and re-runs verification until the work is ready to ship or a blocker needs user decision.",
+            "- Starts from coord brief/sync plus the actual spec, plan, code, tests, and latest reviewer gate verdict; does not rely only on the latest handoff.",
+            "- Uses systematic debugging for bugs and keeps fixes aligned with the latest approved spec/plan and UI/交互需求说明.",
+            "- Records final deliverable status: tests performed, bugs fixed, verification evidence, known residual risk, and any unresolved follow-up.",
         ]
     ),
 }
@@ -493,7 +500,7 @@ def print_existing_agent_warning(group, agent, role):
         return
     print(
         "reviewer-* / reviewer_*、executor-* / executor_*、frontend-* / frontend_*、"
-        "backend-* / backend_*、planner-* / planner_*、spec-writer-* / spec-writer_* "
+        "backend-* / backend_*、planner-* / planner_*、stabilizer-* / stabilizer_* "
         "自动继承对应内置角色；连接符支持中划线和下划线。"
     )
 

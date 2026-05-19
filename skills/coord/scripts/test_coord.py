@@ -104,12 +104,19 @@ class CoordCliTest(unittest.TestCase):
         self.assertIn("matched built-in role: reviewer", join.stdout)
         self.assertIn("Role Instructions", join.stdout)
         self.assertIn("reviews spec, plan, code, tests, and delivery results", join.stdout)
+        self.assertIn("Uses applicable gstack review skills when available", join.stdout)
+        self.assertIn("plan-design-review", join.stdout)
+        self.assertIn("states the limitation and records residual review risk", join.stdout)
+        self.assertIn("Records gate verdicts for every review", join.stdout)
+        self.assertIn("verdict=approved", join.stdout)
+        self.assertIn("checks actual rendered behavior", join.stdout)
         self.assertIn("If this role is not right for the current task", join.stdout)
         manifest = self.read_json("groups/group-a/manifest.json")
         reviewer = manifest["agents"]["reviewer"]
         self.assertEqual("reviewer", reviewer["role"])
         self.assertEqual("builtin", reviewer["role_source"])
         self.assertIn("reviews spec, plan, code, tests, and delivery results", reviewer["role_profile"])
+        self.assertIn("Uses applicable gstack review skills when available", reviewer["role_profile"])
         summary = (self.root / "groups/group-a/agents/reviewer.md").read_text()
         self.assertIn("## Role Profile", summary)
         self.assertIn("Role: reviewer", summary)
@@ -119,11 +126,11 @@ class CoordCliTest(unittest.TestCase):
 
         cases = [
             ("reviewer-2", "reviewer", "reviews spec, plan, code, tests, and delivery results"),
-            ("executor_2", "executor", "executes changes from confirmed specs"),
+            ("executor_2", "executor", "implements approved plans"),
             ("frontend-ui", "frontend", "Executes frontend work with focus on UI"),
             ("backend_api", "backend", "Executes backend work with focus on API contracts"),
             ("planner-design", "planner", "Plans solution, experience, and engineering direction"),
-            ("spec-writer_2", "spec-writer", "Turns stable planner conclusions into superpowers specs"),
+            ("stabilizer_2", "stabilizer", "Stabilizes work after implementation review"),
         ]
         for agent, role, profile_text in cases:
             with self.subTest(agent=agent):
@@ -141,6 +148,64 @@ class CoordCliTest(unittest.TestCase):
                 summary = (self.root / f"groups/group-a/agents/{agent}.md").read_text()
                 self.assertIn(f"Agent: {agent}", summary)
                 self.assertIn(f"Role: {role}", summary)
+
+    def test_join_spec_writer_is_regular_agent_without_builtin_role(self):
+        self.run_cli("init", "group-a")
+
+        join = self.run_cli("join", "group-a", "spec-writer")
+
+        self.assertIn("no built-in role matched", join.stdout)
+        self.assertNotIn("matched built-in role: spec-writer", join.stdout)
+        manifest = self.read_json("groups/group-a/manifest.json")
+        spec_writer = manifest["agents"]["spec-writer"]
+        self.assertNotIn("role", spec_writer)
+        self.assertNotIn("role_source", spec_writer)
+        self.assertNotIn("role_profile", spec_writer)
+        summary = (self.root / "groups/group-a/agents/spec-writer.md").read_text()
+        self.assertIn("Role: (none)", summary)
+
+    def test_planner_role_owns_spec_and_plan_writing(self):
+        self.run_cli("init", "group-a")
+
+        join = self.run_cli("join", "group-a", "planner")
+
+        self.assertIn("matched built-in role: planner", join.stdout)
+        self.assertIn("writes or updates superpowers specs and implementation plans", join.stdout)
+        self.assertIn("Uses superpowers:brainstorming", join.stdout)
+        self.assertIn("Uses superpowers:writing-plans", join.stdout)
+        self.assertIn("Records artifact paths and ready_for_review status", join.stdout)
+
+    def test_planner_role_requires_applicable_gstack_skills(self):
+        self.run_cli("init", "group-a")
+
+        join = self.run_cli("join", "group-a", "planner")
+
+        self.assertIn("matched built-in role: planner", join.stdout)
+        self.assertIn("MUST use applicable gstack skills", join.stdout)
+        self.assertIn("plan-ceo-review", join.stdout)
+        self.assertIn("plan-eng-review", join.stdout)
+
+    def test_executor_role_focuses_on_approved_plan_implementation(self):
+        self.run_cli("init", "group-a")
+
+        join = self.run_cli("join", "group-a", "executor")
+
+        self.assertIn("matched built-in role: executor", join.stdout)
+        self.assertIn("implements approved plans", join.stdout)
+        self.assertIn("Records implementation handoff", join.stdout)
+        self.assertNotIn("Uses superpowers:brainstorming", join.stdout)
+        self.assertNotIn("Uses superpowers:writing-plans", join.stdout)
+
+    def test_stabilizer_role_tests_fixes_and_records_final_state(self):
+        self.run_cli("init", "group-a")
+
+        join = self.run_cli("join", "group-a", "stabilizer")
+
+        self.assertIn("matched built-in role: stabilizer", join.stdout)
+        self.assertIn("Stabilizes work after implementation review", join.stdout)
+        self.assertIn("reproduces issues", join.stdout)
+        self.assertIn("fixes bugs", join.stdout)
+        self.assertIn("Records final deliverable status", join.stdout)
 
     def test_join_existing_agent_suggests_unique_inheriting_name(self):
         self.run_cli("init", "group-a")
@@ -194,7 +259,8 @@ class CoordCliTest(unittest.TestCase):
         self.assertIn("## Current Agent Profile", sync.stdout)
         self.assertIn("Role: executor", sync.stdout)
         self.assertIn("Source: builtin", sync.stdout)
-        self.assertIn("executes changes from confirmed specs, plans, user requests, or reviewer feedback", sync.stdout)
+        self.assertIn("implements approved plans", sync.stdout)
+        self.assertIn("Records implementation handoff", sync.stdout)
 
     def test_ask_answer_and_sync_are_scoped_to_group_and_agent(self):
         self.run_cli("init", "group-a")

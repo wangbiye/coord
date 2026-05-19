@@ -53,14 +53,14 @@ find skills -maxdepth 2 -name SKILL.md | sort
 
 安装脚本会同步安装当前仓库里的 `coord` 和 `coord-*` skills，并清理目标目录里旧的 coord 入口。它不会清理 `lark-*`、`superpowers`、`blueprinter` 或其他非 coord skill。
 
-### 设计规划角色的前置依赖
+### 规划与 spec/plan 写作的前置依赖
 
-`planner` 和 `spec-writer` 是 coord 内置角色名，但它们会调用其他 skill 体系：
+coord 内置角色本身只记录协作状态，但规划和文档写作会调用其他 skill 体系：
 
-- `planner`：用于方案设计、体验设计和工程规划，需要当前 agent 环境已安装并能发现 gstack skills。
-- `spec-writer`：用于把稳定规划结论整理成 superpowers spec 和 implementation plan，需要当前 agent 环境已安装并能发现 superpowers skills。
+- `planner`：用于方案设计、体验设计和工程规划时，需要当前 agent 环境已安装并能发现 gstack skills；用于创建或更新 superpowers spec 和 implementation plan 时，需要能发现 superpowers skills。
+- `reviewer`：用于方案、交互、工程、devex 或 PR-like review 时，适合的场景需要当前 agent 环境已安装并能发现 gstack review skills。
 
-coord 本身不会安装 gstack 或 superpowers。缺少这些依赖时，仍然可以加入 `planner` 或 `spec-writer` 并记录协作状态，但对应角色的设计/写 spec 工作流不能完整执行。
+coord 本身不会安装 gstack 或 superpowers。缺少这些依赖时，仍然可以加入对应角色并记录协作状态，但相关规划、审查或写 spec/plan 工作流不能完整执行。
 
 升级也是同一个命令：
 
@@ -77,7 +77,7 @@ coord 本身不会安装 gstack 或 superpowers。缺少这些依赖时，仍然
 第一个会话：
 
 ```text
-$coord join checkout-flow executor
+$coord join checkout-flow planner
 ```
 
 第二个会话：
@@ -88,12 +88,12 @@ $coord join checkout-flow reviewer
 
 `join` 的 group 不存在时会自动创建。常用 agent 名：
 
-- `executor`：执行实现、修复、验证。
-- `reviewer`：审查 spec、计划、代码、测试和交付结果。
+- `planner`：用 gstack 做方案设计、体验设计和工程规划；用 superpowers 写 spec/plan。
+- `reviewer`：审查 spec、计划、代码、测试和交付结果；适合的方案、交互、工程、devex 或 PR-like review 使用 gstack review skills。
+- `executor`：按已审查通过的 plan 或明确用户请求执行实现、修复、验证。
+- `stabilizer`：实现审查后协助测试、复现问题、查 bug、修 bug，并记录最终交付状态。
 - `frontend`：前端实现或审查。
 - `backend`：后端实现或审查。
-- `planner`：用 gstack 做方案设计、体验设计和工程规划。
-- `spec-writer`：用 superpowers 把稳定规划结论写成 spec 和 implementation plan。
 
 如果需要再开一个同类新会话，不要复用同一个 agent 名。可以使用带后缀的唯一名称：
 
@@ -101,28 +101,35 @@ $coord join checkout-flow reviewer
 $coord join checkout-flow executor-2
 $coord join checkout-flow reviewer_hotfix
 $coord join checkout-flow planner-design
-$coord join checkout-flow spec-writer_2
+$coord join checkout-flow stabilizer_2
 ```
 
-`reviewer-*` / `reviewer_*`、`executor-*` / `executor_*`、`frontend-*` / `frontend_*`、`backend-*` / `backend_*`、`planner-*` / `planner_*`、`spec-writer-*` / `spec-writer_*` 会自动继承对应内置角色卡。连接符支持中划线和下划线。如果 join 时同名 agent 已存在，helper 会建议改名，并提示 `executor-* 自动继承 executor 内置角色` 这类规则。
+`reviewer-*` / `reviewer_*`、`executor-*` / `executor_*`、`frontend-*` / `frontend_*`、`backend-*` / `backend_*`、`planner-*` / `planner_*`、`stabilizer-*` / `stabilizer_*` 会自动继承对应内置角色卡。连接符支持中划线和下划线。如果 join 时同名 agent 已存在，helper 会建议改名，并提示 `executor-* 自动继承 executor 内置角色` 这类规则。
 
 不要使用 `executer`，应使用 `executor`。
 
-### 2. 用 planner 和 spec-writer 做方案到 spec
+### 2. 用 planner、reviewer、executor 和 stabilizer 流转
 
-需要先确认当前 agent 环境已安装 gstack 和 superpowers。然后可以开两个规划相关会话：
+需要先确认当前 agent 环境已安装 gstack 和 superpowers。然后按任务规模选择要开的会话：
 
 ```text
 $coord join checkout-flow planner
-$coord join checkout-flow spec-writer
+$coord join checkout-flow reviewer
+$coord join checkout-flow executor
+$coord join checkout-flow stabilizer
 ```
 
 推荐流转：
 
-1. `planner` 使用 gstack 梳理方案、体验和工程规划，只记录稳定结论、风险和未决问题。
-2. `spec-writer` 同步 coord，读取 `planner` 的稳定结论，用 superpowers 写正式 spec；涉及 UI/交互时，spec 中必须先写「UI/交互需求说明」。
-3. spec 确认后，`spec-writer` 再用 superpowers 写 implementation plan。
-4. `reviewer` 审查 spec/plan，`executor` 按确认后的计划执行。
+1. `planner` 理解需求并使用适用的 gstack skills 产出方案/spec；涉及 UI/交互时，spec 中必须先写「UI/交互需求说明」。写完后记录 spec 路径和 `status=ready_for_review`。
+2. `reviewer` 审查 spec，记录 `verdict=approved` 或 `verdict=changes_requested`。审查通过后才进入写 plan；如果 spec 和 plan 一次写完，也可以一次 review。
+3. `planner` 或 `planner-2` 根据已通过的 spec 写 implementation plan，记录 plan 路径和 `status=ready_for_review`。
+4. `reviewer` 或 `reviewer-2` 审查 plan，记录 gate 结论。通过后，`executor` 按确认后的计划执行开发。
+5. `executor` 完成实现后记录 implementation handoff，包含改动文件、验证结果、未验证原因、偏差和 UI/交互证据。
+6. `reviewer` 或 `reviewer-3` 审查代码和结果是否对齐原始 spec/plan；涉及 UI/交互时，需要尽量实际运行界面或用截图/浏览器证据对照「UI/交互需求说明」。
+7. `stabilizer` 接手收尾：协助测试、复现问题、查根因、修 bug、补验证，直到最终可交付或需要用户决策。
+
+实际开发中不必固定三轮 review；小需求可以压缩流程，但作者记录产物和变更、reviewer 记录 gate 结论、stabilizer 记录最终状态这三条不变。
 
 ### 3. 用户直接指派任务
 
