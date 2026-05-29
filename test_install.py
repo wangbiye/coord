@@ -2,6 +2,7 @@
 import subprocess
 import tempfile
 import unittest
+import os
 from pathlib import Path
 
 
@@ -43,6 +44,40 @@ class InstallScriptTest(unittest.TestCase):
             expected = sorted(path.name for path in SOURCE_SKILLS.iterdir() if path.is_dir() and is_owned_coord_skill(path))
             installed = sorted(path.name for path in target.iterdir() if path.is_dir() and is_owned_coord_skill(path))
             self.assertEqual(expected, installed)
+
+    def test_codex_mode_uses_agent_skills_dir(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            target = Path(tmp) / "codex-skills"
+            env = os.environ.copy()
+            env["AGENT_SKILLS_DIR"] = str(target)
+
+            result = subprocess.run(
+                [str(INSTALL), "codex"],
+                text=True,
+                capture_output=True,
+                env=env,
+            )
+
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertTrue((target / "coord" / "SKILL.md").exists())
+            self.assertIn("Codex skills directory", result.stdout)
+
+    def test_claude_mode_uses_claude_skills_dir(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            target = Path(tmp) / "claude-skills"
+            env = os.environ.copy()
+            env["CLAUDE_SKILLS_DIR"] = str(target)
+
+            result = subprocess.run(
+                [str(INSTALL), "claude"],
+                text=True,
+                capture_output=True,
+                env=env,
+            )
+
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertTrue((target / "coord" / "SKILL.md").exists())
+            self.assertIn("Claude Code skills directory", result.stdout)
 
 
 if __name__ == "__main__":

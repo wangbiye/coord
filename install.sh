@@ -2,8 +2,64 @@
 set -euo pipefail
 
 SOURCE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-TARGET_DIR="${1:-"${AGENT_SKILLS_DIR:-"$HOME/.agents/skills"}"}"
 SOURCE_SKILLS_DIR="$SOURCE_DIR/skills"
+MODE="codex"
+TARGET_ARG=""
+
+usage() {
+  echo "Usage: $0 [codex|claude] [target_dir]"
+  echo "       $0 [target_dir]"
+}
+
+if [ "$#" -gt 0 ]; then
+  case "$1" in
+    codex|--codex)
+      MODE="codex"
+      shift
+      ;;
+    claude|--claude)
+      MODE="claude"
+      shift
+      ;;
+    -h|--help)
+      usage
+      exit 0
+      ;;
+    *)
+      MODE="custom"
+      TARGET_ARG="$1"
+      shift
+      ;;
+  esac
+fi
+
+if [ "$#" -gt 0 ]; then
+  TARGET_ARG="$1"
+  shift
+fi
+
+if [ "$#" -gt 0 ]; then
+  usage >&2
+  exit 2
+fi
+
+case "$MODE" in
+  codex)
+    TARGET_DIR="${TARGET_ARG:-"${AGENT_SKILLS_DIR:-"$HOME/.agents/skills"}"}"
+    TARGET_LABEL="Codex skills directory"
+    RELOAD_MESSAGE="Restart or reload Codex so it can discover the updated skills."
+    ;;
+  claude)
+    TARGET_DIR="${TARGET_ARG:-"${CLAUDE_SKILLS_DIR:-"$HOME/.claude/skills"}"}"
+    TARGET_LABEL="Claude Code skills directory"
+    RELOAD_MESSAGE="Restart Claude Code so it can discover the updated skills."
+    ;;
+  custom)
+    TARGET_DIR="$TARGET_ARG"
+    TARGET_LABEL="skills directory"
+    RELOAD_MESSAGE="Reload your agent environment so it can discover the updated skills."
+    ;;
+esac
 
 mkdir -p "$TARGET_DIR"
 TARGET_DIR="$(cd "$TARGET_DIR" && pwd -P)"
@@ -35,5 +91,5 @@ if [ "$installed_count" -eq 0 ]; then
   exit 1
 fi
 
-echo "Installed $installed_count coord skills to: $TARGET_DIR"
-echo "Reload your agent environment so it can discover the updated skills."
+echo "Installed $installed_count coord skills to $TARGET_LABEL: $TARGET_DIR"
+echo "$RELOAD_MESSAGE"
