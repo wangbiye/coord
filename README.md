@@ -84,14 +84,12 @@ $coord-join shop-query planner
 
 ```text
 $coord-join shop-query reviewer
-$coord-sync
 审查 planner 写的 spec。
 ```
 
 3. 回到 planner 会话：
 
 ```text
-$coord-sync
 根据 reviewer 结论修 spec。
 ```
 
@@ -99,8 +97,7 @@ $coord-sync
 
 ```text
 $coord-join shop-query executor
-$coord-sync
-根据 approved spec/plan 实现。
+根据 spec/plan 实现。
 ```
 
 ## 中等需求：planner 调度
@@ -111,58 +108,49 @@ root planner 会话：
 
 ```text
 $coord-join shop-query planner
-我们启用 planner-led coordination mode。spec 定型后，你负责指派 sub-agent 审查、开发、修复和验收准备。每个 sub-agent 必须自己加入 coord，不要代替它们写 join、handoff 或 review verdict。
+帮我写商品查询 spec。spec 定型后，启用 planner 调度模式。
 ```
 
-root planner 给 sub-agent 的启动提示应包含：
+spec 定型后，继续对 root planner 说：
 
 ```text
-你是 executor-1。
-第一步执行：$coord-join shop-query executor-1
-第二步执行：$coord-sync
-然后读取 approved spec/plan，完成实现并写 handoff。
+spec 没问题，继续推进后续流程。
 ```
 
-reviewer 同理：
+root planner 完成后，回到 root planner 会话：
 
 ```text
-你是 reviewer-code-1。
-第一步执行：$coord-join shop-query reviewer-code-1
-第二步执行：$coord-sync
-基于 spec、plan、diff 和测试结果做独立 code review，并记录 verdict。
+同步结果，给我最终交付状态。
 ```
 
 ## 大需求：分 phase
 
 适合一个需求要拆成多个 phase。完整 phase 目标写在 spec，coord 只写当前 phase 的启动说明。
 
-root planner 负责：
+root planner 会话：
 
 ```text
 $coord-join big-work planner
-先写 root spec 和 phase map。phase map 确认后，每次只在 coord 记录下一个 phase 的 Phase Kickoff Note。
+帮我写 root spec 和 phase map。
 ```
 
-Phase Kickoff Note 建议格式：
+phase map 确认后，继续对 root planner 说：
 
 ```text
-phase kickoff phase-01:
-source_of_truth=docs/spec.md#phase-01
-approved_state=spec approved by reviewer-spec-1
-current_status=ready_to_start
-latest_delta=none
-dependencies_ready=none
-start_instruction=phase planner 先读取 spec 的 Phase 01 Definition，再写 phase plan
-escalation_rules=目标、范围、验收或依赖变化必须问用户/root planner
-expected_handoff=完成内容、验证结果、review verdict、残余风险、是否建议进入下一 phase
+phase map 没问题，写 phase-01 kickoff。
 ```
 
 你新开 phase planner 会话时只需要说：
 
 ```text
 $coord-join big-work phase-01-planner
-$coord-sync
-读取 root planner 写的 phase-01 kickoff note，完成这个 phase。
+执行 phase-01。
+```
+
+phase 完成后，回到 root planner 会话：
+
+```text
+phase-01 已完成，确认结果并准备下一个 phase。
 ```
 
 ## 注意事项
