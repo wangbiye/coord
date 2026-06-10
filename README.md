@@ -45,64 +45,130 @@ Claude Code：
 
 同一个 group 里，每个会话的 agent 名必须唯一。比如已经有一个 `executor`，第二个执行会话就用 `executor-2` 或 `executor_hotfix`；它们会按前缀继承 `executor` 的角色。
 
-## 日常使用
+## 基本用法
 
-`coord-join` 后面有两个参数：
+每个会话先加入同一个 group：
 
-- 第一个参数是 group 名：同一个任务用同一个 group。
-- 第二个参数是 agent 名：当前会话在这个 group 里的角色名。
+```text
+$coord-join <group> <agent>
+```
 
-目标：会话 A 写方案，会话 B 审查方案，再让会话 A 根据审查结论继续。
-
-会话 A 输入：
+例子：
 
 ```text
 $coord-join shop-query planner
 ```
 
-然后继续给会话 A 输入：
+常用命令：
 
 ```text
-帮我写一个商品查询的开发方案
+$coord-sync                 # 同步当前 group 状态
+$coord-status               # 看紧凑状态
+$coord-brief                # 看完整摘要
+$coord note "..."           # 记录当前稳定结论
+$coord handoff              # 交接当前任务结果
 ```
 
-会话 B 输入：
+## 普通多人协作
+
+适合你手动开多个会话，分别做 planner、reviewer、executor。
+
+1. planner 会话：
+
+```text
+$coord-join shop-query planner
+帮我写商品查询的 spec。
+```
+
+2. reviewer 会话：
 
 ```text
 $coord-join shop-query reviewer
+$coord-sync
+审查 planner 写的 spec。
 ```
 
-然后继续给会话 B 输入：
+3. 回到 planner 会话：
 
 ```text
-方案已完成，审查一下
+$coord-sync
+根据 reviewer 结论修 spec。
 ```
 
-回到会话 A 输入：
+4. executor 会话：
 
 ```text
-审查已完成，继续处理
+$coord-join shop-query executor
+$coord-sync
+根据 approved spec/plan 实现。
 ```
 
-```mermaid
-sequenceDiagram
-    participant User as 用户
-    participant A as 会话 A / planner
-    participant Coord as coord group
-    participant B as 会话 B / reviewer
+## 中等需求：planner 调度
 
-    User->>A: $coord-join shop-query planner
-    User->>A: 帮我写一个商品查询的开发方案
-    A->>Coord: 保存方案交接信息
-    User->>B: $coord-join shop-query reviewer
-    User->>B: 方案已完成，审查一下
-    B->>Coord: 读取会话 A 的方案
-    B->>Coord: 保存审查结论
-    User->>A: 审查已完成，继续处理
-    A->>Coord: 读取会话 B 的审查结论
-    A->>A: 继续修改或进入下一步
+适合 spec 定型后，让 root planner 帮你调度 reviewer、executor、stabilizer。
+
+root planner 会话：
+
+```text
+$coord-join shop-query planner
+我们启用 planner-led coordination mode。spec 定型后，你负责指派 sub-agent 审查、开发、修复和验收准备。每个 sub-agent 必须自己加入 coord，不要代替它们写 join、handoff 或 review verdict。
 ```
 
-## 高阶使用
+root planner 给 sub-agent 的启动提示应包含：
 
-输入 `$coord` 或查看对应 skill，探索 ask、answer、claim、release、status、archive 等高阶用法。
+```text
+你是 executor-1。
+第一步执行：$coord-join shop-query executor-1
+第二步执行：$coord-sync
+然后读取 approved spec/plan，完成实现并写 handoff。
+```
+
+reviewer 同理：
+
+```text
+你是 reviewer-code-1。
+第一步执行：$coord-join shop-query reviewer-code-1
+第二步执行：$coord-sync
+基于 spec、plan、diff 和测试结果做独立 code review，并记录 verdict。
+```
+
+## 大需求：分 phase
+
+适合一个需求要拆成多个 phase。完整 phase 目标写在 spec，coord 只写当前 phase 的启动说明。
+
+root planner 负责：
+
+```text
+$coord-join big-work planner
+先写 root spec 和 phase map。phase map 确认后，每次只在 coord 记录下一个 phase 的 Phase Kickoff Note。
+```
+
+Phase Kickoff Note 建议格式：
+
+```text
+phase kickoff phase-01:
+source_of_truth=docs/spec.md#phase-01
+approved_state=spec approved by reviewer-spec-1
+current_status=ready_to_start
+latest_delta=none
+dependencies_ready=none
+start_instruction=phase planner 先读取 spec 的 Phase 01 Definition，再写 phase plan
+escalation_rules=目标、范围、验收或依赖变化必须问用户/root planner
+expected_handoff=完成内容、验证结果、review verdict、残余风险、是否建议进入下一 phase
+```
+
+你新开 phase planner 会话时只需要说：
+
+```text
+$coord-join big-work phase-01-planner
+$coord-sync
+读取 root planner 写的 phase-01 kickoff note，完成这个 phase。
+```
+
+## 注意事项
+
+- 同一个 group 里 agent 名必须唯一。
+- sub-agent 必须自己 join，不要让 planner 代替它 join。
+- reviewer 的 verdict 必须由 reviewer 自己记录。
+- coord 只放交接和当前状态；长期目标、范围、验收标准写进 spec。
+- 不要把密钥、token 或隐私信息写进 coord。
