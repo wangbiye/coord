@@ -108,19 +108,13 @@ root planner 会话：
 
 ```text
 $coord-join shop-query planner
-帮我写商品查询 spec。spec 定型后，启用 planner 调度模式。
+帮我写商品查询 spec。
 ```
 
-spec 定型后，继续对 root planner 说：
+和 planner 沟通并最终定型 spec，继续对 root planner 说：
 
 ```text
-spec 没问题，继续推进后续流程。
-```
-
-root planner 完成后，回到 root planner 会话：
-
-```text
-同步结果，给我最终交付状态。
+spec 没问题，启用调度模式。
 ```
 
 ## 大需求：分 phase
@@ -131,27 +125,31 @@ root planner 会话：
 
 ```text
 $coord-join big-work planner
-帮我写 root spec 和 phase map。
+帮我写一个商城系统。
 ```
 
-phase map 确认后，继续对 root planner 说：
+和 planner 沟通确认 spec。spec 中应当拆分为不同 phase，并且已经有 phase map 和每个 phase 的 Phase Definition。确认 phase map 之后，对 root planner 说：
 
 ```text
-phase map 没问题，写 phase-01 kickoff。
+准备执行 phase-01。
 ```
 
-你新开 phase planner 会话时只需要说：
+此时 root planner 会把目标任务写入 coord。
+
+你新开 phase planner 会话：
 
 ```text
 $coord-join big-work phase-01-planner
-执行 phase-01。
+启用调度模式，执行 phase-01。
 ```
 
-phase 完成后，回到 root planner 会话：
+phase-01 完成后，回到 root planner 会话：
 
 ```text
 phase-01 已完成，确认结果并准备下一个 phase。
 ```
+
+root planner 应当确认结果。确认没问题后，它会把下一任务写入 coord，然后再新开会话重复即可。
 
 ## 注意事项
 
