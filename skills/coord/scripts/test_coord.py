@@ -110,6 +110,7 @@ class CoordCliTest(unittest.TestCase):
         self.assertIn("Records gate verdicts for every review", join.stdout)
         self.assertIn("verdict=approved", join.stdout)
         self.assertIn("checks actual rendered behavior", join.stdout)
+        self.assertIn("review verdicts as independent gates", join.stdout)
         self.assertIn("If this role is not right for the current task", join.stdout)
         manifest = self.read_json("groups/group-a/manifest.json")
         reviewer = manifest["agents"]["reviewer"]
@@ -173,6 +174,8 @@ class CoordCliTest(unittest.TestCase):
         self.assertIn("writes or updates superpowers specs and implementation plans", join.stdout)
         self.assertIn("Uses superpowers:brainstorming", join.stdout)
         self.assertIn("Uses superpowers:writing-plans", join.stdout)
+        self.assertIn("requires each sub-agent to join and sync itself", join.stdout)
+        self.assertIn("Phase Kickoff Notes", join.stdout)
         self.assertIn("Records artifact paths and ready_for_review status", join.stdout)
 
     def test_planner_role_requires_applicable_gstack_skills(self):
@@ -192,6 +195,7 @@ class CoordCliTest(unittest.TestCase):
 
         self.assertIn("matched built-in role: executor", join.stdout)
         self.assertIn("implements approved plans", join.stdout)
+        self.assertIn("When delegated by a planner or root planner", join.stdout)
         self.assertIn("Records implementation handoff", join.stdout)
         self.assertNotIn("Uses superpowers:brainstorming", join.stdout)
         self.assertNotIn("Uses superpowers:writing-plans", join.stdout)
@@ -205,6 +209,7 @@ class CoordCliTest(unittest.TestCase):
         self.assertIn("Stabilizes work after implementation review", join.stdout)
         self.assertIn("reproduces issues", join.stdout)
         self.assertIn("fixes bugs", join.stdout)
+        self.assertIn("source Phase Definition", join.stdout)
         self.assertIn("Records final deliverable status", join.stdout)
 
     def test_join_existing_agent_suggests_unique_inheriting_name(self):

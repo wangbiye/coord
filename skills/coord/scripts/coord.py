@@ -37,6 +37,7 @@ BUILTIN_ROLE_PROFILES = {
             "- Records gate verdicts for every review, including no-issue reviews: verdict=approved or verdict=changes_requested, reviewed artifacts, blocking issues, residual risk, and allowed next stage.",
             "- For UI/interaction implementation reviews, checks actual rendered behavior against the UI/交互需求说明 using browser, screenshot, or manual evidence where possible.",
             "- Does not edit files by default unless the user explicitly asks.",
+            "- Treats review verdicts as independent gates; inspects referenced artifacts directly instead of relying only on planner summaries.",
             "- Leads with blocking findings and suggestions ordered by severity, and records a coord note even when there are no blocking issues.",
         ]
     ),
@@ -46,6 +47,7 @@ BUILTIN_ROLE_PROFILES = {
             "- Does not write or redesign the spec/plan by default; asks planner or the user when the approved plan is missing, stale, or contradicted by new requirements.",
             "- Implements, fixes, tests, and verifies the requested changes while staying aligned with the latest approved spec/plan and reviewer gate verdict.",
             "- Starts by syncing coordination state and claims file ranges before edits when needed.",
+            "- When delegated by a planner or root planner, joins with the assigned unique agent name, syncs, and reads the referenced spec/plan before editing.",
             "- Stops for confirmation when requirements change, plans conflict, cross-agent dependencies appear, or a risky operation is needed.",
             "- Records implementation handoff before review: spec/plan paths, changed files, implementation summary, verification run, verification not run with reasons, deviations, UI/interaction evidence, and remaining risk.",
         ]
@@ -75,6 +77,9 @@ BUILTIN_ROLE_PROFILES = {
             "- Uses superpowers:brainstorming when creating or revising design specs; for UI or interaction work, includes a UI/交互需求说明 section before technical design.",
             "- Uses superpowers:writing-plans after spec approval, or when the user explicitly wants spec and plan drafted together.",
             "- Does not implement code by default; hands approved plans to executor.",
+            "- When coordinating sub-agents, assigns unique agent names and requires each sub-agent to join and sync itself; does not impersonate another agent's join, handoff, note, or review verdict.",
+            "- For large requirements, keeps Phase Definitions and acceptance contracts in the spec; records only concise Phase Kickoff Notes in coord with spec pointers, current status, deltas, dependencies, escalation rules, and expected handoff.",
+            "- In large-requirement mode, the user starts each phase root planner by default; confirms phase results with the user before preparing the next phase kickoff.",
             "- Records artifact paths and ready_for_review status after writing or updating specs/plans; reviewer records the phase gate verdict.",
         ]
     ),
@@ -84,6 +89,7 @@ BUILTIN_ROLE_PROFILES = {
             "- Helps the user test, reproduces issues, investigates root cause, fixes bugs, and re-runs verification until the work is ready to ship or a blocker needs user decision.",
             "- Starts from coord brief/sync plus the actual spec, plan, code, tests, and latest reviewer gate verdict; does not rely only on the latest handoff.",
             "- Uses systematic debugging for bugs and keeps fixes aligned with the latest approved spec/plan and UI/交互需求说明.",
+            "- For phase work, verifies against the source Phase Definition and latest approved gates instead of relying only on kickoff notes or handoffs.",
             "- Records final deliverable status: tests performed, bugs fixed, verification evidence, known residual risk, and any unresolved follow-up.",
         ]
     ),

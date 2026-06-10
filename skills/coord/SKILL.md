@@ -61,6 +61,44 @@ python3 <coord-skill-dir>/scripts/coord.py role --group <group> --agent <agent> 
 
 `sync` prints the current agent role profile. Treat it as active instructions for this session.
 
+## Planner-Led Coordination Mode
+
+Use this mode only when the user explicitly asks a `planner` or root planner to coordinate the post-spec workflow. Ordinary coord groups can continue using direct user-driven handoffs.
+
+Medium requirements:
+
+- The user and root planner agree on the spec before downstream work begins.
+- The root planner may assign or spawn reviewer, executor, and stabilizer sub-agents for plan review, implementation, code review, fixes, and stabilization.
+- Each sub-agent must join the group under its own unique agent name and run `sync` itself before working. The root planner may put the exact `join` and `sync` commands in the sub-agent prompt and then verify membership with `list agents`, `status`, or `brief`.
+- The root planner must not impersonate another agent by running `join`, `note`, `handoff`, or review verdict records on that agent's behalf.
+- Reviewer gate verdicts remain independent and must be recorded by the reviewer, not summarized as a planner decision.
+- The root planner summarizes final status, evidence, and residual risk for the user after the implementation/review/stabilization loop reaches a stable state.
+
+Large requirements:
+
+- The user and root planner first agree on the root spec and phase map.
+- Detailed phase goals, scope, dependencies, validation, and gates belong in the spec as Phase Definitions. Do not duplicate the full phase contract in coord.
+- After the phase map is approved, the root planner records a concise Phase Kickoff Note for the next phase.
+- By default, the user starts each phase root planner in a separate session and points it at the Phase Kickoff Note. The root planner should not automatically launch or assign phase root planners unless the user explicitly delegates that.
+- The phase root planner owns the workflow inside its phase: phase spec/plan updates, review gates, executor work, code review, fixes, and stabilization.
+- After each phase handoff, the user and root planner briefly confirm whether the Phase Definition is satisfied, whether residual risk is accepted, and whether the next phase should begin.
+
+Phase Kickoff Note shape:
+
+```text
+phase kickoff <phase_id>:
+source_of_truth=<spec path and heading/section>
+approved_state=<approved event, revision, or review gate>
+current_status=ready_to_start | blocked | needs_update
+latest_delta=<temporary changes or "none">
+dependencies_ready=<completed prerequisite phases/evidence or blockers>
+start_instruction=<what the phase root planner should read/do first>
+escalation_rules=<what must go back to the user or root planner>
+expected_handoff=<fields the phase root planner must report when done>
+```
+
+If a Phase Kickoff Note conflicts with the spec, the phase root planner must pause and ask the root planner or user to update the spec or confirm the override. Do not treat coord notes as a substitute for reading the actual spec, plan, code, tests, and review evidence.
+
 ## Helper
 
 Use the `coord` skill directory that contains this `SKILL.md`; the helper is at:
