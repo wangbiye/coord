@@ -1,5 +1,10 @@
 # Coord
 
+> **维护状态：已停止维护**
+>
+> Coord 项目不再继续维护。新的协作与本地状态能力已经迁移到 Loop skill，建议后续使用 [loop-skill](https://github.com/wangbiye/loop-skill)。
+> 本仓库仅保留历史版本和已有用法说明。
+
 Coord 用来让多个 AI 会话在本机共享协作状态。适合把同一个任务分给 planner、reviewer、executor 等不同会话，让它们通过同一个 group 交接结果。
 
 不要把密钥、token 或隐私信息写进 coord。
